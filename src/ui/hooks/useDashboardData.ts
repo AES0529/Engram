@@ -322,7 +322,7 @@ export function useDashboardData(refreshInterval = 2000): DashboardData & {
             if (timerRef.current) clearInterval(timerRef.current);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
         };
-    }, [refresh, refreshInterval]);
+    }, [refreshInterval]); // 移除了对 refresh 闭包在 useEffect 中的直接依赖，改为 useRef 或确保 refresh 是稳定回调
 
     return {
         system,

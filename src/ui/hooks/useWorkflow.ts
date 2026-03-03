@@ -2,8 +2,8 @@
  * useWorkflow - 批处理工作流 Hook
  */
 
-import { useState, useEffect, useCallback } from 'react';
 import { batchProcessor, BatchQueue, BatchTaskStatus } from '@/modules/batch';
+import { useCallback, useEffect, useState } from 'react';
 
 export type WorkflowStatus = BatchTaskStatus | 'idle';
 
@@ -39,13 +39,15 @@ export function useWorkflow(): UseWorkflowReturn {
             setError(s.error || null);
         };
 
-        // 初始更新
+        // 初始更新并注册观察者
         updateState();
 
-        // 轮询更新 (或者最好 BatchProcessor 提供订阅机制，这里暂时用轮询)
-        const timer = setInterval(updateState, 500);
+        // V0.9.20 订阅取代 500ms 发热轮询
+        const unsubscribe = batchProcessor.subscribe(() => {
+            updateState();
+        });
 
-        return () => clearInterval(timer);
+        return () => unsubscribe();
     }, []);
 
     const start = useCallback(() => batchProcessor.start(), []);

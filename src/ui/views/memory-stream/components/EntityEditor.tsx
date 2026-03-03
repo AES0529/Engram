@@ -14,6 +14,26 @@ import { debounce } from 'lodash'; // Phase 3 Performance Add: 引入防抖
 import { AlertTriangle, ArrowLeft, RefreshCw, Trash2 } from 'lucide-react';
 import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 
+/**
+ * 根据实体类型获取对应的文字颜色类名
+ */
+function getEntityTextTypeColor(type: string): string {
+    switch (type.toLowerCase()) {
+        case 'char':
+        case 'character':
+            return 'text-emphasis';
+        case 'loc':
+        case 'location':
+            return 'text-value';
+        case 'item':
+            return 'text-label';
+        case 'concept':
+            return 'text-heading';
+        default:
+            return 'text-foreground';
+    }
+}
+
 // 类型别名简化
 type EntityEditorHandle = {
     save: () => void;
@@ -205,7 +225,7 @@ export const EntityEditor = forwardRef<EntityEditorHandle, EntityEditorProps>(({
 
     if (!entity) {
         return (
-            <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2">
+            <div className="flex flex-col items-center justify-center h-full text-meta gap-2">
                 <p className="text-sm font-light">选择一个实体查看详情</p>
             </div>
         );
@@ -216,7 +236,7 @@ export const EntityEditor = forwardRef<EntityEditorHandle, EntityEditorProps>(({
             {/* 基本信息 */}
             <div className="space-y-4">
                 <div>
-                    <label className="text-xs text-muted-foreground">实体名称</label>
+                    <label className="text-xs text-meta">实体名称</label>
                     <input
                         type="text"
                         value={name}
@@ -226,13 +246,13 @@ export const EntityEditor = forwardRef<EntityEditorHandle, EntityEditorProps>(({
                         }}
                         onBlur={handleBlur}
                         style={inputStyle}
-                        className="placeholder:text-muted-foreground/40 focus:border-primary transition-colors font-medium text-lg"
+                        className="placeholder:text-meta/40 focus:border-primary transition-colors font-medium text-lg text-heading"
                     />
                 </div>
 
                 <div className="flex gap-4">
                     <div className="flex-1">
-                        <label className="text-xs text-muted-foreground">类型</label>
+                        <label className="text-xs text-meta">类型</label>
                         <select
                             value={type}
                             onChange={(e) => {
@@ -240,7 +260,7 @@ export const EntityEditor = forwardRef<EntityEditorHandle, EntityEditorProps>(({
                                 setIsDirty(true);
                                 handleBlur(); // Trigger sync
                             }}
-                            className="w-full py-2 bg-transparent border-b border-border outline-none text-sm appearance-none cursor-pointer hover:text-primary transition-colors"
+                            className={`w-full py-2 bg-transparent border-b border-border outline-none text-sm appearance-none cursor-pointer transition-colors ${getEntityTextTypeColor(type)}`}
                         >
                             {ENTITY_TYPES.map(t => (
                                 <option key={t.value} value={t.value} className="bg-popover text-foreground">
@@ -252,7 +272,7 @@ export const EntityEditor = forwardRef<EntityEditorHandle, EntityEditorProps>(({
                 </div>
 
                 <div>
-                    <label className="text-xs text-muted-foreground">别名 (逗号分隔)</label>
+                    <label className="text-xs text-meta">别名 (逗号分隔)</label>
                     <input
                         type="text"
                         value={aliases}
@@ -272,7 +292,7 @@ export const EntityEditor = forwardRef<EntityEditorHandle, EntityEditorProps>(({
             {/* Profile JSON Editor */}
             <div className="flex flex-col gap-2 flex-1 min-h-[200px]">
                 <div className="flex justify-between items-center">
-                    <label className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+                    <label className="text-xs text-meta font-medium uppercase tracking-wider">
                         元数据 Profile (JSON)
                     </label>
                     {jsonError && (
@@ -290,7 +310,7 @@ export const EntityEditor = forwardRef<EntityEditorHandle, EntityEditorProps>(({
                         flex-1 w-full p-4 font-mono text-xs leading-relaxed
                         bg-muted/50 border rounded-md resize-none outline-none
                         transition-colors
-                        ${jsonError ? 'border-destructive focus:border-destructive' : 'border-border focus:border-primary'}
+                        ${jsonError ? 'border-destructive focus:border-destructive' : 'border-border focus:border-value'}
                     `}
                     spellCheck={false}
                 />
@@ -301,7 +321,7 @@ export const EntityEditor = forwardRef<EntityEditorHandle, EntityEditorProps>(({
             {/* Description (Burn-in) */}
             <div className="flex flex-col gap-2">
                 <div className="flex justify-between items-center">
-                    <label className="text-xs text-muted-foreground">
+                    <label className="text-xs text-meta">
                         烧录描述 (YAML/Text)
                     </label>
                     <button
@@ -324,7 +344,7 @@ export const EntityEditor = forwardRef<EntityEditorHandle, EntityEditorProps>(({
                     className="w-full p-3 text-sm bg-transparent border border-border rounded-md outline-none focus:border-primary transition-colors resize-vertical"
                     placeholder="用于提交给 LLM 的实体描述信息..."
                 />
-                <p className="text-[10px] text-muted-foreground">
+                <p className="text-[10px] text-meta">
                     *RAG 检索时将直接使用此字段的内容作为上下文
                 </p>
             </div>
@@ -338,7 +358,7 @@ export const EntityEditor = forwardRef<EntityEditorHandle, EntityEditorProps>(({
         return (
             <div className="h-full flex flex-col bg-transparent">
                 <div className="flex items-center gap-3 px-4 py-3 border-b border-border/50 shrink-0">
-                    <button onClick={onClose} className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded transition-colors">
+                    <button onClick={onClose} className="p-1.5 text-meta hover:text-foreground hover:bg-muted/50 rounded transition-colors">
                         <ArrowLeft size={18} />
                     </button>
                     <h2 className="text-sm font-medium flex-1">编辑实体</h2>
@@ -360,7 +380,7 @@ export const EntityEditor = forwardRef<EntityEditorHandle, EntityEditorProps>(({
                 <div className="flex items-center gap-2 pb-4 border-b border-border shrink-0">
                     <button
                         onClick={onClose}
-                        className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded transition-colors"
+                        className="p-1.5 text-meta hover:text-foreground hover:bg-muted/50 rounded transition-colors"
                         title="返回"
                     >
                         <ArrowLeft size={18} />

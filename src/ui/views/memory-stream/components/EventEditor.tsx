@@ -231,7 +231,7 @@ export const EventEditor = forwardRef<EventEditorHandle, EventEditorProps>(({
 
     if (!event) {
         return (
-            <div className="flex flex-col items-center justify-center h-full text-muted-foreground gap-2 p-8">
+            <div className="flex flex-col items-center justify-center h-full text-meta gap-2 p-8">
                 <p className="text-sm font-light">选择一个事件查看详情</p>
             </div>
         );
@@ -242,7 +242,7 @@ export const EventEditor = forwardRef<EventEditorHandle, EventEditorProps>(({
         <>
             {/* 事件类型 */}
             <div className="flex flex-col gap-1">
-                <label className="text-xs text-muted-foreground">事件类型</label>
+                <label className="text-xs text-meta">事件类型</label>
                 <input
                     type="text"
                     value={eventType}
@@ -251,7 +251,7 @@ export const EventEditor = forwardRef<EventEditorHandle, EventEditorProps>(({
                     onCompositionEnd={(e) => handleCompositionEnd(e, setEventType, 'eventType')}
                     onBlur={handleBlur}
                     style={inputStyle}
-                    className="placeholder:text-muted-foreground/40 focus:border-primary transition-colors"
+                    className="placeholder:text-meta/40 focus:border-primary transition-colors text-heading"
                     placeholder="如：任务确认、战斗结束"
                 />
             </div>
@@ -259,7 +259,7 @@ export const EventEditor = forwardRef<EventEditorHandle, EventEditorProps>(({
             {/* 摘要 */}
             <div className="flex flex-col gap-1">
                 <div className="flex justify-between items-center">
-                    <label className="text-xs text-muted-foreground">摘要内容</label>
+                    <label className="text-xs text-meta">摘要内容</label>
                     <button
                         onClick={() => {
                             const autoSummary = generateSummaryFromKV({
@@ -310,7 +310,7 @@ export const EventEditor = forwardRef<EventEditorHandle, EventEditorProps>(({
 
             {/* 时间锚点 */}
             <div className="flex flex-col gap-1">
-                <label className="text-xs text-muted-foreground">时间锚点</label>
+                <label className="text-xs text-meta">时间锚点</label>
                 <input
                     type="text"
                     value={timeAnchor}
@@ -319,14 +319,14 @@ export const EventEditor = forwardRef<EventEditorHandle, EventEditorProps>(({
                     onCompositionEnd={(e) => handleCompositionEnd(e, setTimeAnchor, 'timeAnchor')}
                     onBlur={handleBlur}
                     style={inputStyle}
-                    className="placeholder:text-muted-foreground/40 focus:border-primary transition-colors"
+                    className="placeholder:text-meta/40 focus:border-primary transition-colors"
                     placeholder="如：太阳历1023年4月4日"
                 />
             </div>
 
             {/* 地点 */}
             <div className="flex flex-col gap-1">
-                <label className="text-xs text-muted-foreground">地点</label>
+                <label className="text-xs text-meta">地点</label>
                 <input
                     type="text"
                     value={location}
@@ -335,14 +335,14 @@ export const EventEditor = forwardRef<EventEditorHandle, EventEditorProps>(({
                     onCompositionEnd={(e) => handleCompositionEnd(e, setLocation, 'location')}
                     onBlur={handleBlur}
                     style={inputStyle}
-                    className="placeholder:text-muted-foreground/40 focus:border-primary transition-colors"
+                    className="placeholder:text-meta/40 focus:border-primary transition-colors text-value"
                     placeholder="地点（逗号分隔多个），如：边境公会大厅, 小镇酒馆"
                 />
             </div>
 
             {/* 人物 */}
             <div className="flex flex-col gap-1">
-                <label className="text-xs text-muted-foreground">人物（逗号分隔）</label>
+                <label className="text-xs text-meta">人物（逗号分隔）</label>
                 <input
                     type="text"
                     value={roleText}
@@ -351,14 +351,14 @@ export const EventEditor = forwardRef<EventEditorHandle, EventEditorProps>(({
                     onCompositionEnd={(e) => handleCompositionEnd(e, setRoleText, 'roleText')}
                     onBlur={handleBlur}
                     style={inputStyle}
-                    className="placeholder:text-muted-foreground/40 focus:border-primary transition-colors"
+                    className="placeholder:text-meta/40 focus:border-primary transition-colors text-emphasis"
                     placeholder="如：{{user}}, 赫伯"
                 />
             </div>
 
             {/* 逻辑标签 */}
             <div className="flex flex-col gap-1">
-                <label className="text-xs text-muted-foreground">逻辑标签（逗号分隔）</label>
+                <label className="text-xs text-meta">逻辑标签（逗号分隔）</label>
                 <input
                     type="text"
                     value={logicText}
@@ -367,7 +367,7 @@ export const EventEditor = forwardRef<EventEditorHandle, EventEditorProps>(({
                     onCompositionEnd={(e) => handleCompositionEnd(e, setLogicText, 'logicText')}
                     onBlur={handleBlur}
                     style={inputStyle}
-                    className="placeholder:text-muted-foreground/40 focus:border-primary transition-colors"
+                    className="placeholder:text-meta/40 focus:border-primary transition-colors text-label"
                     placeholder="如：起点, 伏笔"
                 />
             </div>
@@ -375,8 +375,10 @@ export const EventEditor = forwardRef<EventEditorHandle, EventEditorProps>(({
             {/* 重要性分数 */}
             <div className="flex flex-col gap-2">
                 <div className="flex justify-between items-center">
-                    <label className="text-xs text-muted-foreground">重要性分数</label>
-                    <span className="text-xs font-mono text-foreground">{score.toFixed(2)}</span>
+                    <label className="text-xs text-meta">重要性分数</label>
+                    <span className={`text-xs font-mono ${score >= 0.8 ? 'text-emphasis' : score >= 0.5 ? 'text-value' : 'text-label'}`}>
+                        {score.toFixed(2)}
+                    </span>
                 </div>
                 <div className="relative h-4 flex items-center group cursor-pointer">
                     <div
@@ -384,7 +386,8 @@ export const EventEditor = forwardRef<EventEditorHandle, EventEditorProps>(({
                         style={{ backgroundColor: 'var(--border)' }}
                     />
                     <div
-                        className="absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-muted-foreground/80 rounded-full shadow-sm pointer-events-none transition-transform duration-75 ease-out group-hover:scale-125 group-hover:bg-foreground"
+                        className={`absolute top-1/2 -translate-y-1/2 w-2.5 h-2.5 rounded-full shadow-sm pointer-events-none transition-transform duration-75 ease-out group-hover:scale-125 ${score >= 0.8 ? 'bg-emphasis' : score >= 0.5 ? 'bg-value' : 'bg-label'
+                            }`}
                         style={{ left: `${score * 100}%`, transform: `translate(-50%, -50%)` }}
                     />
                     <input
@@ -403,9 +406,9 @@ export const EventEditor = forwardRef<EventEditorHandle, EventEditorProps>(({
             <Divider spacing="md" />
 
             {/* 只读信息 */}
-            <div className="space-y-1 text-xs text-muted-foreground">
+            <div className="space-y-1 text-xs text-meta">
                 <p>ID: <span className="font-mono">{event.id.substring(0, 8)}...</span></p>
-                <p>Level: {event.level}</p>
+                <p>Level: <span className="text-value font-medium">{event.level}</span></p>
                 {event.source_range && (
                     <p>来源: {event.source_range.start_index}-{event.source_range.end_index}楼</p>
                 )}
@@ -428,7 +431,7 @@ export const EventEditor = forwardRef<EventEditorHandle, EventEditorProps>(({
                 <div className="flex items-center gap-3 px-4 py-3 border-b border-border/50 shrink-0">
                     <button
                         onClick={onClose}
-                        className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded transition-colors"
+                        className="p-1.5 text-meta hover:text-foreground hover:bg-muted/50 rounded transition-colors"
                     >
                         <ArrowLeft size={18} />
                     </button>
@@ -450,7 +453,7 @@ export const EventEditor = forwardRef<EventEditorHandle, EventEditorProps>(({
                 <div className="p-4 border-t border-border shrink-0">
                     <button
                         onClick={onClose}
-                        className="w-full py-2 text-sm border border-border rounded-md text-muted-foreground hover:text-foreground hover:border-foreground/30 transition-colors"
+                        className="w-full py-2 text-sm border border-border rounded-md text-meta hover:text-foreground hover:border-foreground/30 transition-colors"
                     >
                         返回列表
                     </button>
@@ -467,7 +470,7 @@ export const EventEditor = forwardRef<EventEditorHandle, EventEditorProps>(({
                 <div className="flex items-center gap-2 pb-4 border-b border-border shrink-0">
                     <button
                         onClick={onClose}
-                        className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-muted/50 rounded transition-colors"
+                        className="p-1.5 text-meta hover:text-foreground hover:bg-muted/50 rounded transition-colors"
                     >
                         <ArrowLeft size={18} />
                     </button>

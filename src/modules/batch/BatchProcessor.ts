@@ -7,10 +7,8 @@
  */
 
 import { SettingsManager } from '@/config/settings';
-import { getBuiltInTemplateByCategory } from '@/config/types/defaults';
 import { Logger, LogModule } from '@/core/logger';
 import { generateUUID } from '@/core/utils';
-import { llmAdapter } from '@/integrations/llm/Adapter';
 import { summarizerService } from '@/modules/memory';
 import { entityBuilder } from '@/modules/memory/EntityExtractor';
 import { eventTrimmer } from '@/modules/memory/EventTrimmer';
@@ -20,6 +18,7 @@ import { SaveEvent } from '@/modules/workflow/steps/persistence/SaveEvent';
 import { ParseJson } from '@/modules/workflow/steps/processing/ParseJson';
 import { useMemoryStore } from '@/state/memoryStore';
 import { notificationService } from '@/ui/services/NotificationService';
+import { BatchUtils } from './utils/BatchUtils';
 
 // ==================== 类型定义 ====================
 
@@ -93,7 +92,18 @@ class BatchProcessor {
     };
 
     private onProgress?: BatchProgressCallback;
+    private listeners: Set<BatchProgressCallback> = new Set();
     private stopSignal = false;
+
+    /** 订阅状态更新 */
+    subscribe(callback: BatchProgressCallback): () => void {
+        this.listeners.add(callback);
+        // 立即返回当前状态
+        this.notifyProgress();
+        return () => {
+            this.listeners.delete(callback);
+        };
+    }
 
     /** 分析历史消息，计算所需任务 */
     async analyzeHistory(startFloor = 0, endFloor?: number, types?: BatchTaskType[]): Promise<HistoryAnalysis> {
@@ -115,7 +125,8 @@ class BatchProcessor {
         const floorRange = Math.max(0, targetEnd - startFloor);
 
         const summaryInterval = summarizerConfig.floorInterval || 10;
-        const entityInterval = entityConfig.floorInterval || 50;
+        // 如果同步选择了 summary，则 entity 的分片也强行挂载跟随 summary，否则用自己默认的
+        const entityInterval = targetTypes.has('summary') ? summaryInterval : (entityConfig.floorInterval || 50);
 
         const summaryTasks = targetTypes.has('summary') ? Math.ceil(floorRange / summaryInterval) : 0;
         const entityTasks = (targetTypes.has('entity') && entityConfig.enabled) ? Math.ceil(floorRange / entityInterval) : 0;
@@ -138,34 +149,39 @@ class BatchProcessor {
     }
 
     /** 构建任务队列 */
-    buildQueue(analysis: HistoryAnalysis): BatchTask[] {
+    buildQueue(analysis: HistoryAnalysis, types?: BatchTaskType[]): BatchTask[] {
         const tasks: BatchTask[] = [];
+        const targetTypes = new Set(types || ['summary', 'entity', 'trim', 'embed']);
+
         const { startFloor, endFloor, summaryTasks, entityTasks, trimTasks, embedTasks } = analysis;
         const summaryInterval = summarizerService.getConfig().floorInterval || 10;
-        const entityInterval = entityBuilder.getConfig().floorInterval || 50;
+        const entityInterval = targetTypes.has('summary') ? summaryInterval : (entityBuilder.getConfig().floorInterval || 50);
 
-        for (let i = 0; i < summaryTasks; i++) {
-            const taskStart = startFloor + i * summaryInterval;
-            const taskEnd = Math.min(taskStart + summaryInterval, endFloor);
-            tasks.push({
-                id: generateUUID(),
-                type: 'summary',
-                status: 'pending',
-                progress: { current: 0, total: 1 },
-                floorRange: { start: taskStart, end: taskEnd },
-            });
-        }
-
-        for (let i = 0; i < entityTasks; i++) {
-            const taskStart = startFloor + i * entityInterval;
-            const taskEnd = Math.min(taskStart + entityInterval, endFloor);
-            tasks.push({
-                id: generateUUID(),
-                type: 'entity',
-                status: 'pending',
-                progress: { current: 0, total: 1 },
-                floorRange: { start: taskStart, end: taskEnd },
-            });
+        // 使用交替插入的方法来保证顺序（先 summary 后 entity）
+        const maxTasks = Math.max(summaryTasks, entityTasks);
+        for (let i = 0; i < maxTasks; i++) {
+            if (i < summaryTasks && targetTypes.has('summary')) {
+                const taskStart = startFloor + i * summaryInterval;
+                const taskEnd = Math.min(taskStart + summaryInterval, endFloor);
+                tasks.push({
+                    id: generateUUID(),
+                    type: 'summary',
+                    status: 'pending',
+                    progress: { current: 0, total: 1 },
+                    floorRange: { start: taskStart, end: taskEnd },
+                });
+            }
+            if (i < entityTasks && targetTypes.has('entity')) {
+                const taskStart = startFloor + i * entityInterval;
+                const taskEnd = Math.min(taskStart + entityInterval, endFloor);
+                tasks.push({
+                    id: generateUUID(),
+                    type: 'entity',
+                    status: 'pending',
+                    progress: { current: 0, total: 1 },
+                    floorRange: { start: taskStart, end: taskEnd },
+                });
+            }
         }
 
         for (let i = 0; i < trimTasks; i++) {
@@ -200,7 +216,9 @@ class BatchProcessor {
         this.stopSignal = false;
 
         const analysis = await this.analyzeHistory(startFloor, endFloor, types);
-        this.queue.tasks = this.buildQueue(analysis);
+        this.queue.tasks = this.buildQueue(analysis, types);
+        this.queue.overallProgress.total = this.queue.tasks.length;
+        this.queue.overallProgress.current = 0;
 
         if (this.queue.tasks.length === 0) {
             Logger.warn(LogModule.BATCH, '没有生成任何任务');
@@ -241,11 +259,9 @@ class BatchProcessor {
             } catch (error) {
                 task.status = 'error';
                 task.error = String(error);
-                Logger.error(LogModule.BATCH, `任务 ${task.type} 失败`, { error: String(error) });
-                // V0.9.10: 弹错误通知
-                notificationService.error(`批处理任务失败: ${task.type}`, 'Engram 批处理');
-                // Critical Fix: 遇到错误立即中断批处理，防止中间楼层被架空
-                break;
+                Logger.warn(LogModule.BATCH, `任务 ${task.type} ${task.floorRange ? `(${task.floorRange.start} - ${task.floorRange.end})` : ''} 失败, 容错跳过`, { error: String(error) });
+                // 仅抛出容假警告，不中断批队列，使断点续传后续可继续
+                continue;
             }
 
             this.queue.currentTaskIndex++;
@@ -290,19 +306,35 @@ class BatchProcessor {
 
     private async executeSummaryTask(task: BatchTask): Promise<void> {
         if (!task.floorRange) return;
+
+        // 1. 触发总结服务 (Summary)，底层会自动更新 last_summarized_floor 指针
         await summarizerService.setLastSummarizedFloor(task.floorRange.start);
         const result = await summarizerService.triggerSummary(true);
         if (!result) {
-            // Strict Mode: summary 失败不能简单跳过，必须报错中断，否则会导致该段历史在数据库中缺失
+            // Strict Mode: summary 失败不能简单跳过，必须报错，交由上层标记 error 并 continue
             throw new Error(`Summary task failed for range ${task.floorRange.start}-${task.floorRange.end}`);
         }
     }
 
     private async executeEntityTask(task: BatchTask): Promise<void> {
         if (!task.floorRange) return;
-        // V0.9.9: 使用 extractByRange 传入准确的任务范围
-        const result = await entityBuilder.extractByRange([task.floorRange.start, task.floorRange.end], true);
-        if (!result) task.status = 'skipped';
+
+        // 单独抽取实体时，借用从外部存好的底层进度来确切提取剩余未提的
+        const { chatManager } = await import('@/data/ChatManager');
+        const state = await chatManager.getState();
+        const lastExtracted = state.last_extracted_floor || 0;
+        const targetEnd = task.floorRange.end;
+
+        if (targetEnd > lastExtracted) {
+            const extractRange: [number, number] = [lastExtracted + 1, targetEnd];
+            const extractResult = await entityBuilder.extractByRange(extractRange, true);
+            if (!extractResult) {
+                Logger.warn(LogModule.BATCH, `Entity extraction softly skipped for range ${extractRange[0]}-${extractRange[1]}`);
+                task.status = 'skipped';
+            }
+        } else {
+            task.status = 'skipped';
+        }
     }
 
     private async executeTrimTask(task: BatchTask): Promise<void> {
@@ -395,67 +427,34 @@ class BatchProcessor {
     }
 
     private notifyProgress(): void {
+        const queueState = { ...this.queue };
+        // 兼容原有的 onProgress 单线回调
         if (this.onProgress) {
             try {
-                this.onProgress({ ...this.queue });
+                this.onProgress(queueState);
             } catch (e) {
-                // Ignore UI callback errors to keep process running
-                Logger.debug(LogModule.BATCH, '进度回调失败（UI 已卸载）', e);
+                Logger.debug(LogModule.BATCH, '单线回调失败', e);
             }
         }
+
+        // 广播给所有订阅者
+        this.listeners.forEach(listener => {
+            try {
+                listener(queueState);
+            } catch (e) {
+                Logger.debug(LogModule.BATCH, '订阅者回调失败', e);
+            }
+        });
     }
 
     // ==================== 外部 txt 导入 ====================
-
-    chunkText(text: string, chunkSize: number, overlapSize: number): string[] {
-        // 防御性校验：overlapSize >= chunkSize 会导致 start 指针无法前进（死循环）
-        if (overlapSize >= chunkSize) {
-            Logger.warn(LogModule.BATCH, `overlapSize(${overlapSize}) >= chunkSize(${chunkSize})，强制修正`, {});
-            overlapSize = Math.max(0, chunkSize - 1);
-        }
-
-        const chunks: string[] = [];
-        let start = 0;
-        while (start < text.length) {
-            const end = Math.min(start + chunkSize, text.length);
-            chunks.push(text.slice(start, end));
-            start = end - overlapSize;
-            if (start >= text.length - overlapSize) break;
-        }
-        return chunks;
-    }
-
-    /**
-     * V0.9.7: 调用 LLM 对单个文本块生成结构化摘要
-     */
-    private async summarizeChunk(chunk: string, chunkIndex: number): Promise<string> {
-        const template = getBuiltInTemplateByCategory('summary');
-        const systemPrompt = template?.systemPrompt || '';
-        const userPrompt = `请对以下外部导入的文本片段进行结构化摘要，按照系统提示的格式输出 JSON：
-
----
-${chunk}
----`;
-
-        try {
-            const response = await llmAdapter.generate({ systemPrompt, userPrompt });
-            if (response.success && response.content) {
-                Logger.debug(LogModule.BATCH, `分块 ${chunkIndex} 总结完成`);
-                return response.content;
-            }
-        } catch (error) {
-            Logger.warn(LogModule.BATCH, `分块 ${chunkIndex} 总结失败`, { error });
-        }
-        // 降级：返回空，让调用方使用原文
-        return '';
-    }
 
     async importText(
         text: string,
         config: ImportConfig = DEFAULT_IMPORT_CONFIG,
         onProgress?: BatchProgressCallback
     ): Promise<{ success: number; failed: number }> {
-        const chunks = this.chunkText(text, config.chunkSize, config.overlapSize);
+        const chunks = BatchUtils.chunkText(text, config.chunkSize, config.overlapSize);
         const store = useMemoryStore.getState();
         await store.initChat();
 
@@ -487,7 +486,7 @@ ${chunk}
             try {
                 if (config.mode === 'detailed') {
                     // V0.9.7: 调用 LLM 生成结构化摘要
-                    const llmResult = await this.summarizeChunk(chunk, i);
+                    const llmResult = await BatchUtils.summarizeChunk(chunk, i);
 
                     if (llmResult) {
                         // 使用 Workflow Engine 解析 JSON 并存储

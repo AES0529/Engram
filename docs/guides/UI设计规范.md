@@ -42,13 +42,13 @@
 
 #### 6 色语义表
 
-| Token | 代码高亮类比 | UI 用途 | 示例 | Catppuccin Mocha |
+| Token | 代码高亮类比 | UI 用途 | 示例 | Catppuccin Mocha(其他主题不一定是这个色系) |
 |---|---|---|---|---|
 | `text-heading` | 关键字 `const`, `import` | 标题、功能名称 | "自动总结"、"异界降临" | Mauve `#cba6f7` |
 | `text-label` | 类型 `EntityNode` | 标签、分类 | "character"、"已嵌入" | Blue `#89b4fa` |
 | `text-meta` | 注释 `// ...` | 时间戳、弱信息 | "(复兴纪元488年)"、"Level 0" | Overlay0 `#6c7086` |
 | `text-link` | 装饰器 `@Route` | 可交互文本 | "查看全部"、跳转按钮 | Yellow `#f9e2af` |
-| `text-value` | 字符串 `'hello'` | 数据值、量化数字 | "47"、"2,346 Tok" | Green `#a6e3a1` |
+| `text-value` | 字符串 `'hello'` | 数据值,量化数字,kv中的"value"| "47"、"2,346 Tok" | Green `#a6e3a1` |
 | `text-emphasis` | 数字常量 `42` | 强调、重要标记 | 连接角色名、待处理数 | Peach `#fab387` |
 
 加上已有的 `text-foreground`（正文）和 `text-muted-foreground`（弱化），共计 **8 级文本色阶**。

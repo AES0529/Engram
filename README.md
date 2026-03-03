@@ -8,7 +8,7 @@
   ![License](https://img.shields.io/badge/license-MIT-green?style=for-the-badge)
 </div>
 
-**Engram** 是专为 **SillyTavern (酒馆)** 设计的下一代智能记忆扩展。它通过**知识图谱 (Knowledge Graph)** 和 **RAG (检索增强生成)** 技术，不仅提供直观的记忆可视化，更能让 AI 角色拥有持久、连贯且可追溯的记忆能力。
+**Engram** 是专为 **SillyTavern (酒馆)** 设计的下一代智能记忆扩展。它通过**RAG (检索增强生成)** 技术，不仅提供直观的记忆可视化，更能让 AI 角色拥有持久、连贯且可追溯的记忆能力。
 
 ---
 
@@ -26,9 +26,7 @@
 ## ✨ 核心特性 (Features)
 
 - **Memory Stream (记忆流)**: 以时间轴形式直观展示所有记忆片段，支持重要度高亮。
-- **World Graph (世界图谱)**: 实时可视化的知识图谱，展示角色、地点、物品及事件之间的深层关联。
 - **Story Summary (剧情总结)**: 内置纯文本双层记忆总结系统，自动提炼关键剧情，防止上下文遗忘。
-- **Graph RAG (图谱检索)**: 基于图谱的混合检索与重排算法，比传统向量检索更精准。
 - **API Presets (API 预设)**: 灵活配置多种 LLM 接口，支持针对不同任务（总结、提取）使用不同模型。
 - **Modern UI (现代化界面)**: 采用 Glassmorphism 设计语言，配合流畅动画，提供原生应用级体验。
 - **Dev Log (开发日志)**: 内置实时日志查看器，方便调试与监控。
@@ -84,7 +82,7 @@ npm run dev:watch
 ---
 
 ## 📁 目录结构 (Project Structure)
-
+参考"docs/architecture/项目文件架构.md"
 
 ---
 

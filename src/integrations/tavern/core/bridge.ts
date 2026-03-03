@@ -68,8 +68,6 @@ export async function initializeEngram(): Promise<void> {
     // 优先使用顶栏按钮，找不到则使用悬浮球
     createTopBarButton();
 
-    // 监听 ST 事件
-    setupEventListeners();
 
     // 初始化主题系统 (注入 CSS 并应用变量)
     const { ThemeManager } = await import('@/ui/services/ThemeManager');
@@ -136,12 +134,3 @@ export async function initializeEngram(): Promise<void> {
     Logger.success('STBridge', 'Engram 初始化完成 - Where memories leave their trace.');
 }
 
-/**
- * 设置事件监听
- */
-function setupEventListeners(): void {
-    // 监听聊天变化事件（根据 ST 的实际事件名调整）
-    // eventSource?.addEventListener('chatChanged', () => {
-    //     EventBus.emit({ type: 'CHAT_CHANGED', payload: {} });
-    // });
-}

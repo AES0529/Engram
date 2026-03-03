@@ -55,7 +55,7 @@ export function QuickPanel({ isOpen, onClose }: QuickPanelProps) {
             }));
     }, [templates]);
 
-    // 轮询同步配置 (解决 Dashboard -> QuickPanel 的单向同步问题)
+    // 使用事件订阅替代轮询同步配置机制
     useEffect(() => {
         if (!isOpen) return;
 
@@ -71,17 +71,19 @@ export function QuickPanel({ isOpen, onClose }: QuickPanelProps) {
                 setRecallConfig((prev: any) => (JSON.stringify(prev) !== JSON.stringify(newRecall) ? newRecall : prev));
 
                 const newTemplates = apiSettings.promptTemplates || [];
-                // 模板很少变，这里简单比较长度或者不做深度比较也行，但为了严谨还是对比一下
-                if (newTemplates.length !== templates.length) {
-                    setTemplates(newTemplates);
-                }
+                setTemplates(prev => newTemplates.length !== prev.length ? newTemplates : prev);
             }
         };
 
-        syncData(); // 立即执行一次
-        const interval = setInterval(syncData, 3000); // 降频至 3 秒，缓解 UI 发热
-        return () => clearInterval(interval);
-    }, [isOpen, templates.length]);
+        syncData(); // 初始化读取
+
+        // 订阅设置更改事件
+        const unsubscribe = SettingsManager.subscribe(syncData);
+
+        return () => {
+            unsubscribe();
+        };
+    }, [isOpen]);
 
     // 切换启用状态
     const handleToggle = useCallback(() => {

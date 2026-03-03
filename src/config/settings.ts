@@ -1,14 +1,13 @@
-import { Logger } from '@/core/logger';
-import type { PromptTemplate } from '@/config/types/prompt';
-import type { PromptCategory } from '@/config/types/prompt';
+import type { PreprocessingConfig, RegexRule } from '@/config/types/data_processing';
 import type { EngramAPISettings } from '@/config/types/defaults';
 import { getBuiltInTemplateById } from '@/config/types/defaults';
-import type { RegexRule, PreprocessingConfig } from '@/config/types/data_processing';
+import type { PromptCategory, PromptTemplate } from '@/config/types/prompt';
+import { Logger } from '@/core/logger';
 
 export interface EngramSettings {
     theme: string;
-    presets: any; // 暂未定义的预设类型
-    templates: any; // 暂未定义的模板类型
+    presets: Record<string, any>; // 待扩展的预设类型，暂时使用 Record
+    templates: Record<string, any>; // 待扩展的模板类型，暂时使用 Record
     promptTemplates: PromptTemplate[]; // 提示词模板列表
     hasSeenWelcome: boolean; // 是否已观看欢迎动画
     lastReadVersion: string; // 最后已读的版本号
@@ -74,6 +73,29 @@ const defaultSettings: EngramSettings = Object.freeze({
  */
 export class SettingsManager {
     private static readonly EXTENSION_NAME = 'engram';
+    private static listeners: Set<() => void> = new Set();
+
+    /**
+     * 订阅设置变更事件
+     * @param listener 回调函数
+     * @returns 取消订阅的函数
+     */
+    public static subscribe(listener: () => void): () => void {
+        this.listeners.add(listener);
+        return () => {
+            this.listeners.delete(listener);
+        };
+    }
+
+    private static notifyListeners(): void {
+        this.listeners.forEach(l => {
+            try {
+                l();
+            } catch (e) {
+                Logger.warn('SettingsManager', 'Listener Execution Error', e);
+            }
+        });
+    }
 
     /**
      * 获取 SillyTavern context
@@ -173,6 +195,9 @@ export class SettingsManager {
         // 更新单个字段
         context.extensionSettings[this.EXTENSION_NAME][key] = value;
         Logger.debug('SettingsManager', `Set ${String(key)} = ${JSON.stringify(value)}`);
+
+        // 触发变更通知
+        this.notifyListeners();
 
         // 保存到服务器
         this.save();

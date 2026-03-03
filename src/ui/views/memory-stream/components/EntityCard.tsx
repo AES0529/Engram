@@ -9,6 +9,26 @@ import type { EntityNode } from '@/data/types/graph';
 import { ChevronRight } from 'lucide-react';
 import React from 'react';
 
+/**
+ * 根据实体类型获取对应的主题颜色类名
+ */
+function getEntityTypeColor(type: string): string {
+    switch (type.toLowerCase()) {
+        case 'char':
+        case 'character':
+            return 'text-emphasis bg-emphasis/10 border-emphasis/20';
+        case 'loc':
+        case 'location':
+            return 'text-value bg-value/10 border-value/20';
+        case 'item':
+            return 'text-label bg-label/10 border-label/20';
+        case 'concept':
+            return 'text-heading bg-heading/10 border-heading/20';
+        default:
+            return 'text-meta bg-muted/10 border-border';
+    }
+}
+
 interface EntityCardProps {
     entity: EntityNode;
     isSelected?: boolean;
@@ -55,17 +75,17 @@ export const EntityCard: React.FC<EntityCardProps> = ({
                         <span className="text-xs font-medium text-heading">
                             {entity.name}
                         </span>
-                        <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-label border border-primary/20 uppercase">
+                        <span className={`text-[10px] px-1.5 py-0.5 rounded-full border uppercase ${getEntityTypeColor(entity.type)}`}>
                             {entity.type}
                         </span>
                     </div>
-                    <p className="text-xs text-muted-foreground truncate mt-1">
+                    <p className="text-xs text-meta truncate mt-1">
                         {entity.description}
                     </p>
                 </div>
 
                 {/* 箭头 */}
-                <ChevronRight size={16} className="text-muted-foreground" />
+                <ChevronRight size={16} className="text-meta" />
             </div>
         );
     }
@@ -97,13 +117,13 @@ export const EntityCard: React.FC<EntityCardProps> = ({
                 <span className="text-sm font-medium text-heading">
                     {entity.name}
                 </span>
-                <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-label border border-primary/20 uppercase">
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full border uppercase ${getEntityTypeColor(entity.type)}`}>
                     {entity.type}
                 </span>
             </div>
 
             {/* 描述文本 */}
-            <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
+            <p className="text-xs text-meta line-clamp-2 leading-relaxed">
                 {entity.description}
             </p>
 

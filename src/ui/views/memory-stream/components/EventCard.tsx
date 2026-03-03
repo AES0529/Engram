@@ -28,13 +28,18 @@ interface EventCardProps {
  */
 function ScoreDots({ score }: { score: number }) {
     const filled = Math.round(score * 5);
+
+    // 动态决定颜色层级
+    const activeColor = score >= 0.8 ? 'bg-emphasis'
+        : score >= 0.5 ? 'bg-value'
+            : 'bg-label';
+
     return (
         <div className="flex gap-0.5">
             {[0, 1, 2, 3, 4].map(i => (
                 <span
                     key={i}
-                    className={`w-1.5 h-1.5 rounded-full ${i < filled ? 'bg-primary' : 'bg-muted'
-                        }`}
+                    className={`w-1.5 h-1.5 rounded-full ${i < filled ? activeColor : 'bg-muted'}`}
                 />
             ))}
         </div>
@@ -63,22 +68,24 @@ function EmbeddingBadge({ isEmbedded }: { isEmbedded: boolean }) {
  */
 function MetaLine({ event }: { event: EventNode }) {
     const kv = event.structured_kv;
-    const parts: string[] = [];
+    // 不再合并为一个字符串，而是保留语义信息单独渲染
+    const hasData = kv.time_anchor || kv.location || (kv.role && kv.role.length > 0);
+    if (!hasData) return null;
 
-    if (kv.time_anchor) parts.push(kv.time_anchor);
-    // V1.0.2: location 兼容 string 和 string[] 两种旧版本格式
-    if (kv.location) {
-        const locStr = Array.isArray(kv.location) ? kv.location.join(', ') : String(kv.location);
-        if (locStr) parts.push(locStr);
-    }
-    if (kv.role && kv.role.length > 0) parts.push(kv.role.join(', '));
-
-    if (parts.length === 0) return null;
+    const locStr = Array.isArray(kv.location) ? kv.location.join(', ') : String(kv.location || '');
 
     return (
-        <p className="text-xs text-meta truncate">
-            ({parts.join(' | ')})
-        </p>
+        <div className="flex flex-wrap items-center gap-1.5 text-xs truncate">
+            {kv.time_anchor && (
+                <span className="text-value">({kv.time_anchor})</span>
+            )}
+            {locStr && (
+                <span className="text-value">@{locStr}</span>
+            )}
+            {kv.role && kv.role.length > 0 && (
+                <span className="text-emphasis">[{kv.role.join(', ')}]</span>
+            )}
+        </div>
     );
 }
 
@@ -137,7 +144,7 @@ export const EventCard: React.FC<EventCardProps> = ({
                         {event.is_embedded && (
                             <Zap size={10} className="text-label" />
                         )}
-                        <span className="text-xs text-meta">
+                        <span className={`text-xs ${event.significance_score >= 0.8 ? 'text-emphasis' : event.significance_score >= 0.5 ? 'text-value' : 'text-label'}`}>
                             {event.significance_score.toFixed(1)}
                         </span>
                     </div>
@@ -147,7 +154,7 @@ export const EventCard: React.FC<EventCardProps> = ({
                 </div>
 
                 {/* 箭头 */}
-                <ChevronRight size={16} className="text-muted-foreground" />
+                <ChevronRight size={16} className="text-meta" />
             </div>
         );
     }
@@ -207,11 +214,11 @@ export const EventCard: React.FC<EventCardProps> = ({
 
             {/* 底部信息 */}
             <div className="flex items-center gap-2 mt-2 text-xs text-meta">
-                <span>Level {event.level}</span>
+                <span>Level <span className="text-value font-medium">{event.level}</span></span>
                 {event.source_range && (
                     <>
                         <span>•</span>
-                        <span>来源: {event.source_range.start_index}-{event.source_range.end_index}楼</span>
+                        <span>来源: <span className="text-value">{event.source_range.start_index}-{event.source_range.end_index}楼</span></span>
                     </>
                 )}
             </div>

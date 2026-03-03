@@ -1,8 +1,8 @@
-import { SearchAdapter, SearchResult } from '../SearchService';
 import { COMMANDS } from '@/constants/commands';
 import { NAV_ITEMS, NavItem } from '@/constants/navigation';
 import { useThemeStore } from '@/state/themeStore';
-import { Sun, Moon, Palette } from 'lucide-react';
+import { Moon, Palette, Sun } from 'lucide-react';
+import { SearchAdapter, SearchResult } from '../SearchService';
 
 export class CommandAdapter implements SearchAdapter {
     async search(query: string): Promise<SearchResult[]> {
@@ -54,13 +54,13 @@ export class CommandAdapter implements SearchAdapter {
 
         return [
             {
-                id: 'theme-paper-light',
+                id: 'theme-tokyo-light',
                 type: 'command' as const,
-                title: '主题: Paper Light (Twitter)',
-                description: '清爽明亮的推特风格',
+                title: '主题: Tokyo Light',
+                description: '清爽明亮的浅色风格',
                 icon: Sun,
-                action: () => setTheme('paperLight'),
-                keywords: ['theme', 'light', 'white', 'twitter', 'paper', '主题'],
+                action: () => setTheme('tokyoLight'),
+                keywords: ['theme', 'light', 'white', 'tokyo', 'paper', '主题'],
                 score: 5
             },
             {
@@ -94,13 +94,13 @@ export class CommandAdapter implements SearchAdapter {
                 score: 5
             },
             {
-                id: 'theme-discord',
+                id: 'theme-everforest',
                 type: 'command' as const,
-                title: '主题: Discord Dark',
-                description: '经典的 Discord 深色风格',
+                title: '主题: Everforest',
+                description: '护眼的绿色森林风格',
                 icon: Palette,
-                action: () => setTheme('discord'),
-                keywords: ['theme', 'dark', 'discord', 'game', '主题'],
+                action: () => setTheme('everforest'),
+                keywords: ['theme', 'dark', 'everforest', 'green', 'wood', '主题'],
                 score: 5
             }
         ];

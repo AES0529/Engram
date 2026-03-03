@@ -197,8 +197,10 @@ export const EntityReview: React.FC<EntityReviewProps> = ({ data, onChange }) =>
                                     <span className="w-2 h-2 rounded-full bg-primary"></span>
                                     新烧录文本预览 (New Description Preview)
                                 </label>
-                                <div className="flex-1 p-3 bg-primary/5 border border-primary/20 rounded-md text-xs font-mono overflow-y-auto custom-scrollbar select-text whitespace-pre-wrap break-all text-foreground">
-                                    {previewDescription}
+                                <div className="flex-1 p-3 bg-primary/5 border border-primary/20 rounded-md text-xs font-mono overflow-y-auto overflow-x-hidden custom-scrollbar select-text whitespace-pre-wrap break-words max-w-full text-foreground relative">
+                                    <div className="absolute inset-0 p-3 overflow-y-auto custom-scrollbar">
+                                        {previewDescription}
+                                    </div>
                                 </div>
                             </div>
                         </div>
