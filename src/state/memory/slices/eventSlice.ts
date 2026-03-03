@@ -1,4 +1,4 @@
-import { generateUUID } from '@/core/utils';
+import { generateShortUUID } from '@/core/utils';
 import type { EventNode } from '@/data/types/graph';
 import { WorldInfoService } from '@/integrations/tavern';
 import { StateCreator } from 'zustand';
@@ -27,7 +27,7 @@ export const createEventSlice: StateCreator<any, [], [], EventState> = (set, get
 
         const event: EventNode = {
             ...eventData,
-            id: generateUUID(),
+            id: generateShortUUID('evt_'),
             timestamp: eventData.timestamp ?? Date.now(),
             is_embedded: eventData.is_embedded ?? false,
             is_archived: eventData.is_archived ?? false,
@@ -49,7 +49,7 @@ export const createEventSlice: StateCreator<any, [], [], EventState> = (set, get
 
         const events: EventNode[] = eventsData.map(data => ({
             ...data,
-            id: generateUUID(),
+            id: generateShortUUID('evt_'),
             timestamp: data.timestamp ?? Date.now(),
             is_embedded: data.is_embedded ?? false,
             is_archived: data.is_archived ?? false,

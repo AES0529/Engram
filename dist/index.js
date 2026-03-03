@@ -42,14 +42,12 @@ function m8() {
   return XC || (XC = 1, C2.exports = /* @__PURE__ */ h8()), C2.exports;
 }
 var c = /* @__PURE__ */ m8();
-const p8 = "1.3.4", i4 = {
-  version: p8
-};
-function Ya() {
-  return typeof crypto < "u" && typeof crypto.randomUUID == "function" ? crypto.randomUUID() : "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (e) => {
-    const t = Math.random() * 16 | 0;
-    return (e === "x" ? t : t & 3 | 8).toString(16);
-  });
+function Ya(e, t = 6) {
+  const n = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
+  let r = e;
+  for (let s = 0; s < t; s++)
+    r += n.charAt(Math.floor(Math.random() * n.length));
+  return r;
 }
 var Aw = function(e, t) {
   return Aw = Object.setPrototypeOf || { __proto__: [] } instanceof Array && function(n, r) {
@@ -218,9 +216,9 @@ function pE(e) {
 function QC(e) {
   ec(e) ? e() : e.unsubscribe();
 }
-var g8 = {
+var p8 = {
   Promise: void 0
-}, x8 = {
+}, g8 = {
   setTimeout: function(e, t) {
     for (var n = [], r = 2; r < arguments.length; r++)
       n[r - 2] = arguments[r];
@@ -231,8 +229,8 @@ var g8 = {
   },
   delegate: void 0
 };
-function y8(e) {
-  x8.setTimeout(function() {
+function x8(e) {
+  g8.setTimeout(function() {
     throw e;
   });
 }
@@ -241,11 +239,11 @@ function JC() {
 function r1(e) {
   e();
 }
-var s4 = (function(e) {
+var i4 = (function(e) {
   jx(t, e);
   function t(n) {
     var r = e.call(this) || this;
-    return r.isStopped = !1, n ? (r.destination = n, pE(n) && n.add(r)) : r.destination = w8, r;
+    return r.isStopped = !1, n ? (r.destination = n, pE(n) && n.add(r)) : r.destination = b8, r;
   }
   return t.create = function(n, r, s) {
     return new Dw(n, r, s);
@@ -272,7 +270,7 @@ var s4 = (function(e) {
       this.unsubscribe();
     }
   }, t;
-})(tb), v8 = (function() {
+})(tb), y8 = (function() {
   function e(t) {
     this.partialObserver = t;
   }
@@ -311,29 +309,29 @@ var s4 = (function(e) {
       next: n ?? void 0,
       error: r ?? void 0,
       complete: s ?? void 0
-    } : a = n, l.destination = new v8(a), l;
+    } : a = n, l.destination = new y8(a), l;
   }
   return t;
-})(s4);
+})(i4);
 function Iv(e) {
-  y8(e);
+  x8(e);
 }
-function b8(e) {
+function v8(e) {
   throw e;
 }
-var w8 = {
+var b8 = {
   closed: !0,
   next: JC,
-  error: b8,
+  error: v8,
   complete: JC
-}, S8 = (function() {
+}, w8 = (function() {
   return typeof Symbol == "function" && Symbol.observable || "@@observable";
 })();
-function C8(e) {
+function S8(e) {
   return e;
 }
-function _8(e) {
-  return e.length === 0 ? C8 : e.length === 1 ? e[0] : function(n) {
+function C8(e) {
+  return e.length === 0 ? S8 : e.length === 1 ? e[0] : function(n) {
     return e.reduce(function(r, s) {
       return s(r);
     }, n);
@@ -347,7 +345,7 @@ var e_ = (function() {
     var n = new e();
     return n.source = this, n.operator = t, n;
   }, e.prototype.subscribe = function(t, n, r) {
-    var s = this, l = j8(t) ? t : new Dw(t, n, r);
+    var s = this, l = k8(t) ? t : new Dw(t, n, r);
     return r1(function() {
       var a = s, d = a.operator, h = a.source;
       l.add(d ? d.call(l, h) : h ? s._subscribe(l) : s._trySubscribe(l));
@@ -377,12 +375,12 @@ var e_ = (function() {
   }, e.prototype._subscribe = function(t) {
     var n;
     return (n = this.source) === null || n === void 0 ? void 0 : n.subscribe(t);
-  }, e.prototype[S8] = function() {
+  }, e.prototype[w8] = function() {
     return this;
   }, e.prototype.pipe = function() {
     for (var t = [], n = 0; n < arguments.length; n++)
       t[n] = arguments[n];
-    return _8(t)(this);
+    return C8(t)(this);
   }, e.prototype.toPromise = function(t) {
     var n = this;
     return t = t_(t), new t(function(r, s) {
@@ -401,20 +399,20 @@ var e_ = (function() {
 })();
 function t_(e) {
   var t;
-  return (t = e ?? g8.Promise) !== null && t !== void 0 ? t : Promise;
+  return (t = e ?? p8.Promise) !== null && t !== void 0 ? t : Promise;
 }
-function k8(e) {
+function _8(e) {
   return e && ec(e.next) && ec(e.error) && ec(e.complete);
 }
-function j8(e) {
-  return e && e instanceof s4 || k8(e) && pE(e);
+function k8(e) {
+  return e && e instanceof i4 || _8(e) && pE(e);
 }
-function E8(e) {
+function j8(e) {
   return ec(e == null ? void 0 : e.lift);
 }
-function T8(e) {
+function E8(e) {
   return function(t) {
-    if (E8(t))
+    if (j8(t))
       return t.lift(function(n) {
         try {
           return e(n, this);
@@ -425,10 +423,10 @@ function T8(e) {
     throw new TypeError("Unable to lift unknown Observable type");
   };
 }
-function N8(e, t, n, r, s) {
-  return new A8(e, t, n, r, s);
+function T8(e, t, n, r, s) {
+  return new N8(e, t, n, r, s);
 }
-var A8 = (function(e) {
+var N8 = (function(e) {
   jx(t, e);
   function t(n, r, s, l, a, d) {
     var h = e.call(this, n) || this;
@@ -463,11 +461,11 @@ var A8 = (function(e) {
       e.prototype.unsubscribe.call(this), !r && ((n = this.onFinalize) === null || n === void 0 || n.call(this));
     }
   }, t;
-})(s4), R8 = hE(function(e) {
+})(i4), A8 = hE(function(e) {
   return function() {
     e(this), this.name = "ObjectUnsubscribedError", this.message = "object unsubscribed";
   };
-}), o4 = (function(e) {
+}), s4 = (function(e) {
   jx(t, e);
   function t() {
     var n = e.call(this) || this;
@@ -478,7 +476,7 @@ var A8 = (function(e) {
     return r.operator = n, r;
   }, t.prototype._throwIfClosed = function() {
     if (this.closed)
-      throw new R8();
+      throw new A8();
   }, t.prototype.next = function(n) {
     var r = this;
     r1(function() {
@@ -565,16 +563,18 @@ var A8 = (function(e) {
     var r, s;
     return (s = (r = this.source) === null || r === void 0 ? void 0 : r.subscribe(n)) !== null && s !== void 0 ? s : mE;
   }, t;
-})(o4);
-function M8(e, t) {
-  return T8(function(n, r) {
+})(s4);
+function R8(e, t) {
+  return E8(function(n, r) {
     var s = 0;
-    n.subscribe(N8(r, function(l) {
+    n.subscribe(T8(r, function(l) {
       return e.call(t, l, s++) && r.next(l);
     }));
   });
 }
-const Qf = class Qf {
+const M8 = "1.3.4", o4 = {
+  version: M8
+}, Qf = class Qf {
   constructor() {
     nt(this, "unsubscribers", []);
     nt(this, "callbacks", /* @__PURE__ */ new Map());
@@ -669,7 +669,7 @@ class O8 {
     });
   }
 }
-const z8 = new O8(), Pv = new o4(), a4 = {
+const z8 = new O8(), Pv = new s4(), a4 = {
   /**
    * 发布事件
    */
@@ -692,7 +692,7 @@ const z8 = new O8(), Pv = new o4(), a4 = {
    * 订阅特定类型的事件
    */
   on(e, t) {
-    const n = Pv.pipe(M8((r) => r.type === e)).subscribe((r) => t(r.payload));
+    const n = Pv.pipe(R8((r) => r.type === e)).subscribe((r) => t(r.payload));
     return {
       unsubscribe: () => n.unsubscribe()
     };
@@ -715,7 +715,7 @@ const S1 = {
   maxEntries: 5e3,
   minLevel: 0
   /* DEBUG */
-}, gE = new o4();
+}, gE = new s4();
 let Vc = [], B0 = { ...D8 }, r_ = !1;
 function I8(e) {
   return new Date(e).toTimeString().slice(0, 8);
@@ -723,7 +723,7 @@ function I8(e) {
 function Qm(e, t, n, r) {
   if (e < B0.minLevel) return;
   const s = {
-    id: Ya(),
+    id: Ya("log_"),
     timestamp: Date.now(),
     level: e,
     module: t,
@@ -821,7 +821,7 @@ const V = {
 
 `;
     n += `- **导出时间**: ${e.toLocaleString("zh-CN")}
-`, n += `- **版本**: ${i4.version}
+`, n += `- **版本**: ${o4.version}
 `, n += `- **日志条数**: ${Vc.length}
 
 `, n += `---
@@ -13980,7 +13980,7 @@ const $5 = (e, t) => ({
     if (!r) throw new Error("[MemoryStore] No current chat");
     const s = {
       ...n,
-      id: Ya(),
+      id: Ya("ent_"),
       last_updated_at: Date.now(),
       aliases: n.aliases || [],
       profile: n.profile || {}
@@ -13993,7 +13993,7 @@ const $5 = (e, t) => ({
     if (n.length === 0) return [];
     const s = n.map((l) => ({
       ...l,
-      id: Ya(),
+      id: Ya("ent_"),
       last_updated_at: Date.now(),
       aliases: l.aliases || [],
       profile: l.profile || {}
@@ -14097,7 +14097,7 @@ ${g}
     if (!r) throw new Error("[MemoryStore] No current chat");
     const s = {
       ...n,
-      id: Ya(),
+      id: Ya("evt_"),
       timestamp: n.timestamp ?? Date.now(),
       is_embedded: n.is_embedded ?? !1,
       is_archived: n.is_archived ?? !1
@@ -14112,7 +14112,7 @@ ${g}
     if (n.length === 0) return [];
     const s = n.map((l) => ({
       ...l,
-      id: Ya(),
+      id: Ya("evt_"),
       timestamp: l.timestamp ?? Date.now(),
       is_embedded: l.is_embedded ?? !1,
       is_archived: l.is_archived ?? !1
@@ -31244,7 +31244,7 @@ const ET = /* @__PURE__ */ kh(jB), Wm = {
   owner: "shiyue137mh-netizen",
   repo: "Engram",
   branch: "master"
-}, qv = i4.version;
+}, qv = o4.version;
 let _0 = null, k0 = null;
 function H2(e, t) {
   const n = e.split(".").map(Number), r = t.split(".").map(Number);
@@ -47621,7 +47621,7 @@ const mX = /* @__PURE__ */ I.forwardRef(hX), pX = ({
       /* @__PURE__ */ c.jsx(gX, { height: 12 }),
       /* @__PURE__ */ c.jsxs("span", { className: "text-[10px] text-muted-foreground font-mono", children: [
         "v",
-        i4.version
+        o4.version
       ] })
     ] })
   ] });
@@ -49445,7 +49445,7 @@ class y6 {
   static async run(t, n) {
     var l;
     const r = Date.now(), s = {
-      id: n.id || Ya(),
+      id: n.id || Ya("wf_"),
       trigger: n.trigger || "manual",
       config: n.config || {},
       input: n.input || {},
@@ -60513,7 +60513,7 @@ class Yee {
       if (j < d && s.has("summary")) {
         const E = l + j * y, N = Math.min(E + y, a);
         r.push({
-          id: Ya(),
+          id: Ya("job_"),
           type: "summary",
           status: "pending",
           progress: { current: 0, total: 1 },
@@ -60523,7 +60523,7 @@ class Yee {
       if (j < h && s.has("entity")) {
         const E = l + j * b, N = Math.min(E + b, a);
         r.push({
-          id: Ya(),
+          id: Ya("job_"),
           type: "entity",
           status: "pending",
           progress: { current: 0, total: 1 },
@@ -60533,13 +60533,13 @@ class Yee {
     }
     for (let j = 0; j < m; j++)
       r.push({
-        id: Ya(),
+        id: Ya("job_"),
         type: "trim",
         status: "pending",
         progress: { current: 0, total: 1 }
       });
     return g > 0 && r.push({
-      id: Ya(),
+      id: Ya("job_"),
       type: "embed",
       status: "pending",
       progress: { current: 0, total: g }
@@ -60695,7 +60695,7 @@ class Yee {
     let a = 0, d = 0;
     this.queue = {
       tasks: [{
-        id: Ya(),
+        id: Ya("job_"),
         type: "embed",
         status: "running",
         progress: { current: 0, total: s.length }

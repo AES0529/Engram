@@ -1,4 +1,4 @@
-import { generateUUID } from '@/core/utils';
+import { generateShortUUID } from '@/core/utils';
 import type { EntityNode } from '@/data/types/graph';
 import { StateCreator } from 'zustand';
 import { getCurrentDb, tryGetCurrentDb } from './coreSlice';
@@ -34,7 +34,7 @@ export const createEntitySlice: StateCreator<any, [], [], EntityState> = (set, g
 
         const entity: EntityNode = {
             ...entityData,
-            id: generateUUID(),
+            id: generateShortUUID('ent_'),
             last_updated_at: Date.now(),
             aliases: entityData.aliases || [],
             profile: entityData.profile || {},
@@ -52,7 +52,7 @@ export const createEntitySlice: StateCreator<any, [], [], EntityState> = (set, g
 
         const entities: EntityNode[] = entitiesData.map(data => ({
             ...data,
-            id: generateUUID(),
+            id: generateShortUUID('ent_'),
             last_updated_at: Date.now(),
             aliases: data.aliases || [],
             profile: data.profile || {},

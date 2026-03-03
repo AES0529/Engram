@@ -15,29 +15,20 @@ function truncateText(text: string, maxLength: number): string {
     return text.slice(0, maxLength) + '...';
 }
 
-/**
- * 生成唯一 ID (简单版)
- */
-function generateId(): string {
-    return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
-}
+
 
 /**
- * 生成 UUID v4
- * 优先使用 crypto.randomUUID，不可用时回退到手动生成
+ * 生成语义化短 UUID (例如 evt_A1b2C3)
+ * 采用 Base62 字符集，默认 6 位长度，兼顾极短体积与防撞性能。
+ * @param prefix 自定义前缀，如 'evt_' 或 'ent_'
+ * @param length 随机串长度，默认为 6
  */
-export function generateUUID(): string {
-    // 优先使用原生 API
-    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-        return crypto.randomUUID();
+export function generateShortUUID(prefix: string, length: number = 6): string {
+    const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+    let result = prefix;
+    for (let i = 0; i < length; i++) {
+        result += chars.charAt(Math.floor(Math.random() * chars.length));
     }
-
-    // 回退方案：手动生成 UUID v4 格式
-    // xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx
-    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-        const r = Math.random() * 16 | 0;
-        const v = c === 'x' ? r : (r & 0x3 | 0x8);
-        return v.toString(16);
-    });
+    return result;
 }
 

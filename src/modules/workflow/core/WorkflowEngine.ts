@@ -1,5 +1,5 @@
 import { Logger } from '@/core/logger';
-import { generateUUID } from '@/core/utils';
+import { generateShortUUID } from '@/core/utils';
 import { JobContext } from './JobContext';
 import { IStep } from './Step';
 
@@ -27,7 +27,7 @@ export class WorkflowEngine {
 
         // 1. 初始化完整 Context
         const context: JobContext = {
-            id: initialContext.id || generateUUID(),
+            id: initialContext.id || generateShortUUID('wf_'),
             trigger: initialContext.trigger || 'manual',
             config: initialContext.config || {},
             input: initialContext.input || {},

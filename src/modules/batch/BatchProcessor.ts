@@ -8,7 +8,7 @@
 
 import { SettingsManager } from '@/config/settings';
 import { Logger, LogModule } from '@/core/logger';
-import { generateUUID } from '@/core/utils';
+import { generateShortUUID } from '@/core/utils';
 import { summarizerService } from '@/modules/memory';
 import { entityBuilder } from '@/modules/memory/EntityExtractor';
 import { eventTrimmer } from '@/modules/memory/EventTrimmer';
@@ -164,7 +164,7 @@ class BatchProcessor {
                 const taskStart = startFloor + i * summaryInterval;
                 const taskEnd = Math.min(taskStart + summaryInterval, endFloor);
                 tasks.push({
-                    id: generateUUID(),
+                    id: generateShortUUID('job_'),
                     type: 'summary',
                     status: 'pending',
                     progress: { current: 0, total: 1 },
@@ -175,7 +175,7 @@ class BatchProcessor {
                 const taskStart = startFloor + i * entityInterval;
                 const taskEnd = Math.min(taskStart + entityInterval, endFloor);
                 tasks.push({
-                    id: generateUUID(),
+                    id: generateShortUUID('job_'),
                     type: 'entity',
                     status: 'pending',
                     progress: { current: 0, total: 1 },
@@ -186,7 +186,7 @@ class BatchProcessor {
 
         for (let i = 0; i < trimTasks; i++) {
             tasks.push({
-                id: generateUUID(),
+                id: generateShortUUID('job_'),
                 type: 'trim',
                 status: 'pending',
                 progress: { current: 0, total: 1 },
@@ -195,7 +195,7 @@ class BatchProcessor {
 
         if (embedTasks > 0) {
             tasks.push({
-                id: generateUUID(),
+                id: generateShortUUID('job_'),
                 type: 'embed',
                 status: 'pending',
                 progress: { current: 0, total: embedTasks },
@@ -463,7 +463,7 @@ class BatchProcessor {
 
         this.queue = {
             tasks: [{
-                id: generateUUID(),
+                id: generateShortUUID('job_'),
                 type: 'embed',
                 status: 'running',
                 progress: { current: 0, total: chunks.length },

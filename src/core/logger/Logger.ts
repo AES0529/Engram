@@ -5,12 +5,12 @@
  * 替代 console.log，确保调试信息可追踪、可导出。
  */
 
-import manifest from '../../../manifest.json';
-import { generateUUID } from '@/core/utils';
+import { generateShortUUID } from '@/core/utils';
 import { Subject } from 'rxjs';
-import { EventBus, EngramEvent } from '../events';
-import { LogLevel, LogEntry, LoggerConfig, DEFAULT_LOGGER_CONFIG } from './types';
+import manifest from '../../../manifest.json';
+import { EngramEvent, EventBus } from '../events';
 import type { LogModule } from './LogModule';
+import { DEFAULT_LOGGER_CONFIG, LogEntry, LoggerConfig, LogLevel } from './types';
 
 // 日志流 Subject (RxJS)
 const logSubject = new Subject<LogEntry>();
@@ -41,7 +41,7 @@ function writeLog(level: LogLevel, module: string, message: string, data?: unkno
     if (level < config.minLevel) return;
 
     const entry: LogEntry = {
-        id: generateUUID(),
+        id: generateShortUUID('log_'),
         timestamp: Date.now(),
         level,
         module,
