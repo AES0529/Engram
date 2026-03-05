@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.3.5] - 2026-03-05
+
+### 🐛 稳定性修复与重构 (Bug Fixes & Refactoring)
+
+- **无框环境隔离修复 (Borderless Guard)**:
+  - 修复了防抖和异步闭包竞争导致的 `EntityEditor` JSON 数据相互污染、甚至出现空 `{}` 数据误覆盖的致命缺陷。遇到错误 JSON 语法时强行中断后续链路避免冲掉配置。
+- **并发状态分离 (State Segregation)**:
+  - `MemoryStream` 重构列表刷新机制，引入独立内存区 `pendingChanges` 记录列表界面即时的更改，避免高速点击修改时由于旧实例覆写所带来的真实数据覆盖问题。
+- **UI渲染减负**:
+  - `EventEditor` 中的评分滑动条，修改其逻辑，只在 `onMouseUp` 和 `onTouchEnd` 回弹才触发面向整个 React 顶层树的全量同步状态更新，拖拽时仅在本机做本地更新。大幅度消除了无意义的连贯 Context 穿透重算 (帧数从 21fps 飙升至满帧)。
+- **批处理防坠毁**:
+  - `BatchProcessor` 的 `Summary` 执行被统一调整为具备健壮性的静默跳过（同 `Trim`/`Embed`）。单条内容的失败现只会将本子项归类到 `skipped` 并继续整个长数组，而不是直接 `throw Error` 让全列车出轨宕机。
+- **类脑存储复用度清理**:
+  - 移除了 `BrainRecallCache` 内无效的历史包裹体 `evict()`，将其与 `enforceShortTermLimit()` 合二为一，消除功能层叠。
+- **抽离与治理**：把冗长的钩内计算统归至外部纯函数 `streamProcessors.ts`；追加了尝试通过旧方式导入文件未保存时，给到阻断性提示。
+
 ## [1.3.4] - 2026-03-03
 
 ### ✨ 批处理与核心机制重构 (Batch Processing Refactoring)
@@ -28,50 +44,5 @@
   - 替代了原有的 `text-green-500` 等硬编码颜色，大幅提升了浅色/深色主题的切换体验与视觉一致性。
   - 为内置的 10 套主题（Catppuccin、Nord、Everforest 等）全量适配了对应的色板色彩，确保不受毛玻璃背景降低亮度的影响。
   - Dashboard、事件卡片、实体编辑器、表单页面等核心组件已全面应用该规范。
-
-## [1.3.2] - 2026-03-02
-
-### 🔧 重构 (Refactoring)
-
-- **表单布局重写与统一**:
-  - 全面彻底移除 `NumberField` 内部自带滑块的耦合组件设计，现在它仅负责纯展示强数字输入职能。
-  - 在 `LLMPresetForm` (API预设) 页面中使用了类似 `SummaryPanel` 的 **自然语言指引式表单样式**（例如 "模型的温度为 (输入框)"），结合独立的 `SliderField` 组合，大大增强了参数阅读引导感。
-  - 移除了包含在 `EntityConfigPanel` 等页面中手工模拟的纯背景滑槽，一律换用官方的独立 `SliderField`。
-- **去除冗余的 Virtuoso**:
-  - `ModelLog` 和 `RecallLog` 由于展示量级属于中低频即插即用的日志等级（非持久化），彻底剥离了 `react-virtuoso` 虚拟列表。
-  - 解决了由于原生 Flex 弹性布局的渲染时延导致虚拟列表偶然性计算出 0 高度所引发的页面“坍缩白屏”问题。
-- **状态同步监控降频**：为了降低过度激进的 UI 热更新引发的无效重绘和风扇狂转卡顿，将快速操作控制面板 `QuickPanel.tsx` 中向远端同步状态的 `setInterval` 频率从每秒钟一次放松至每 3 秒钟一次。
-
-### 🚀 架构优化 (Architecture Improvements)
-
-- **Embedding 多源对接层剥离**：彻底将过度增殖至将近七百行的 `EmbeddingService.ts` 解耦。建立专职对接口 `EmbeddingClient.ts` 进入 integrations 下管理所有的诸如 OpenAI/Ollama 等的请求格式和 fetch 交互操作，使其回归单纯批次分配控制器的本源角色。
-- **环境宏预载入基座拆分**：将负责向 Prompt 中填装环境背景的宏指令池 `macros.ts` 当中最消耗心智与篇幅的长篇代码抽离，分解为两项独立的职能服务：`chatHistory.ts` (历史管理、正则清理代理) 与 `ejsProcessor.ts` (接管底层 ST 内置的 EJS 渲染)，有效化解了上帝类陷阱。
-
-### 🐛 修复 (Bug Fixes)
-
-- **并发实体入库流量管控**：修复了在提取巨量实体节点时触发 `Promise.all` 的无差别广播查询更新，引发瞬间并发撑爆 IndexedDB 导致堵塞白屏的隐患，引入了每 50 批次为一个限流循环的发送保护策略。
-
-- **空指针与防白错误隔离**:
-  - 为 `EventEditor.tsx` 在处理记忆节点中部分历史数据异常残缺（例如缺少 `structured_kv`）造成的空指针增加可选链探测 (`?.`) 容错。
-- **定时器与事件闭包泄露**:
-  - 重构 `useDashboardData.ts` 引入 `useRef`，以避免长期挂机的酒馆环境在可见性 (`visibilitychange`) 多次切换时导致轮询 Timer 的旧实例驻留在内存闭包中。
-- **Vite 机制重合修补**:
-  - 给 `KeyboardManager.ts` 等全局实例在触发 HMR 热重载时补偿了注销流程 (`import.meta.hot.dispose`)。
-  - 优化了由于连续触发载入导致的重复 DOM 事件侦听累加，彻底转正了在 `index.tsx` 和 UI 接口层中针对快速切换角色的挂载回收容错能力。
-
-## [1.3.1] - 2026-03-01
-
-### 🔧 重构 (Refactoring)
-
-- **SliderField 原子组件抽离**:
-  - 将散落在 `FormComponents.NumberField` 和 `SummaryPanel` 中的内联滑块实现，统一抽取为独立的 `SliderField` 原子组件 (`src/ui/components/core/SliderField.tsx`)。
-  - 采用 **隐藏原生 input + 纯 div 渲染** 方案（类似 `Switch` 组件），彻底规避 SillyTavern 全局 CSS 对 `input[type=range]` 的样式覆盖问题。
-  - `SummaryPanel` 四处滑块（Token 阈值、活跃事件数、层间隔、缓冲层数）及 `NumberField` 的可选滑块均已迁移至该组件。
-
-### 🐛 修复 (Bug Fixes)
-
-- **记忆编辑视图白屏修复**: 恢复 `MemoryStream` 根容器的 `absolute inset-0` 定位，解决因 `MainLayout` 中 `min-h-full` wrapper 无法向子级传递确定高度而导致 `react-virtuoso` 虚拟列表高度塌陷为 0 的问题。
-- **移动端全屏表单透底修复**: `MobileFullscreenForm` 的 Portal 容器增加 `backdrop-blur-3xl` 与 `bg-background/95`，修复部分透明主题下底层内容透出的视觉干扰。
-- **记忆编辑页面内边距**: 给 `MemoryStream` 外层容器补充 `p-4 md:p-6` 响应式内边距，与其他页面（如 API 预设、设置）保持一致的留白。
 
 

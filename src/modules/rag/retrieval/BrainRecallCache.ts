@@ -6,10 +6,9 @@
  * - Boredom Penalty: 改为排序时的临时减分 (Penalty * (Count - Threshold))
  */
 
-import { Logger, LogModule } from '@/core/logger';
-import type { BrainRecallConfig } from '@/config/types/rag';
 import { DEFAULT_BRAIN_RECALL_CONFIG } from '@/config/types/defaults';
-import { embeddingService } from '../embedding/EmbeddingService';
+import type { BrainRecallConfig } from '@/config/types/rag';
+import { Logger, LogModule } from '@/core/logger';
 
 const MODULE = 'BrainRecallCache';
 
@@ -157,13 +156,10 @@ export class BrainRecallCache {
         }
         Logger.debug(LogModule.RAG_CACHE, `Added ${addedCount} new items. Current Size: ${this.shortTermMemory.size}`);
 
-        // 4. 淘汰 (Eviction)
+        // 4. 淘汰 (Eviction) & 5. 容量限制
         const sizeBeforeEvict = this.shortTermMemory.size;
-        this.evict();
-        Logger.debug(LogModule.RAG_CACHE, `Evicted ${sizeBeforeEvict - this.shortTermMemory.size} items. Current Size: ${this.shortTermMemory.size}`);
-
-        // 5. 容量限制
         this.enforceShortTermLimit();
+        Logger.debug(LogModule.RAG_CACHE, `Evicted ${sizeBeforeEvict - this.shortTermMemory.size} items. Current Size: ${this.shortTermMemory.size}`);
 
         // 6. 选取工作记忆 (Sorting Logic)
         const workingMemory = this.selectWorkingMemory();
@@ -245,11 +241,7 @@ export class BrainRecallCache {
         slot.finalScore = this.sigmoid(z, temp);
     }
 
-    /**
-     * V1.4: 基于容量的淘汰策略
-     * 只有当 STM 超出容量上限时才淘汰，而非基于阈值
-     */
-    private evict(): void {
+    private enforceShortTermLimit(): void {
         const limit = this.config.shortTermLimit;
 
         // 不满，不淘汰
@@ -257,7 +249,7 @@ export class BrainRecallCache {
             return;
         }
 
-        // 超出容量时，按 finalScore 从低到高淘汰多余的
+        // 🐛 P3 Bugfix: 移除原有的 evict，将超限淘汰逻辑与 enforceLimit 直接合并
         const overflow = this.shortTermMemory.size - limit;
         const sorted = Array.from(this.shortTermMemory.values())
             .filter(slot => slot.firstRound !== this.currentRound) // 保护新人
@@ -265,20 +257,6 @@ export class BrainRecallCache {
 
         for (let i = 0; i < overflow && i < sorted.length; i++) {
             this.shortTermMemory.delete(sorted[i].id);
-        }
-    }
-
-    private enforceShortTermLimit(): void {
-        const limit = this.config.shortTermLimit;
-        if (this.shortTermMemory.size <= limit) return;
-
-        // 这里用 finalScore 排序淘汰是合理的，因为这是 Long-term retention 机制
-        const sorted = Array.from(this.shortTermMemory.values())
-            .sort((a, b) => a.finalScore - b.finalScore);
-
-        const toRemove = sorted.slice(0, this.shortTermMemory.size - limit);
-        for (const slot of toRemove) {
-            this.shortTermMemory.delete(slot.id);
         }
     }
 
@@ -370,7 +348,7 @@ export class BrainRecallCache {
             slot.consecutiveWorkingCount = 0;
             this.calculateFinalScore(slot);
         }
-        this.evict();
+        this.enforceShortTermLimit();
     }
 
     hardReset(): void {

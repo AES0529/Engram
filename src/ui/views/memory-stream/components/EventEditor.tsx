@@ -223,11 +223,7 @@ export const EventEditor = forwardRef<EventEditorHandle, EventEditorProps>(({
         }, 50);
     };
 
-    const updateScore = (value: number) => {
-        setScore(value);
-        setIsDirty(true);
-        syncToParent({ score: value });
-    };
+    // 移除导致全量渲染的无保护 updateScore，交由 input 的拆分事件直接更新
 
     if (!event) {
         return (
@@ -396,7 +392,14 @@ export const EventEditor = forwardRef<EventEditorHandle, EventEditorProps>(({
                         max="1"
                         step="0.05"
                         value={score}
-                        onChange={(e) => updateScore(parseFloat(e.target.value))}
+                        onChange={(e) => {
+                            const val = parseFloat(e.target.value);
+                            setScore(val);
+                            setIsDirty(true);
+                        }}
+                        onMouseUp={() => syncToParent({ score })}
+                        onTouchEnd={() => syncToParent({ score })}
+                        onKeyUp={() => syncToParent({ score })}
                         className="absolute inset-x-0 w-full h-full opacity-0 cursor-pointer z-10 m-0"
                         style={{ appearance: 'none', WebkitAppearance: 'none' }}
                     />

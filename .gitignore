@@ -29,8 +29,6 @@ npm-debug.log*
 # Documentation
 
 # Workspace
-# Workspace
-Engram_project.code-workspace
-
+*.code-workspace
 # Scripts and test
 test

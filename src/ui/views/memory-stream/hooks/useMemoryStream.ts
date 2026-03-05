@@ -4,6 +4,7 @@ import { embeddingService } from '@/modules/rag/embedding/EmbeddingService';
 import { brainRecallCache } from '@/modules/rag/retrieval/BrainRecallCache';
 import { useMemoryStore } from '@/state/memoryStore';
 import { notificationService } from '@/ui/services/NotificationService';
+import { filterEntities, filterEvents, groupEvents } from '@/ui/views/memory-stream/utils/streamProcessors';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const DESKTOP_BREAKPOINT = 768;
@@ -105,60 +106,11 @@ export function useMemoryStream() {
     // ==========================================
 
     const filteredEvents = useMemo(() => {
-        let result = events;
-
-        if (searchQuery.trim()) {
-            const q = searchQuery.toLowerCase();
-            result = result.filter(e =>
-                e.summary.toLowerCase().includes(q) ||
-                e.structured_kv.event?.toLowerCase().includes(q) ||
-                e.structured_kv.role?.some(r => r.toLowerCase().includes(q))
-            );
-        }
-
-        if (showActiveOnly) {
-            result = result.filter(e => activeIds.has(e.id));
-        }
-
-        return [...result].sort((a, b) => sortOrder === 'asc' ? a.timestamp - b.timestamp : b.timestamp - a.timestamp);
-    }, [events, searchQuery, showActiveOnly, activeIds, sortOrder]);
+        return filterEvents(events, pendingChanges, searchQuery, showActiveOnly, activeIds, sortOrder);
+    }, [events, pendingChanges, searchQuery, showActiveOnly, activeIds, sortOrder]);
 
     const groupedEvents = useMemo(() => {
-        const interval = SettingsManager.get('summarizerConfig')?.floorInterval || 10;
-        const groups = new Map<number, { title: string, events: EventNode[] }>();
-
-        filteredEvents.forEach(event => {
-            const startIndex = event.source_range?.start_index || 0;
-            const groupKey = Math.floor(startIndex / interval) * interval;
-
-            if (!groups.has(groupKey)) {
-                const displayStart = groupKey === 0 ? 1 : groupKey + 1;
-                const displayEnd = groupKey + interval;
-                groups.set(groupKey, {
-                    title: `第 ${displayStart} - ${displayEnd} 楼`,
-                    events: []
-                });
-            }
-            groups.get(groupKey)!.events.push(event);
-        });
-
-        const sortedKeys = Array.from(groups.keys()).sort((a, b) => sortOrder === 'asc' ? a - b : b - a);
-
-        return sortedKeys.map((key) => {
-            const group = groups.get(key)!;
-            group.events.sort((a, b) => {
-                if (a.level !== b.level) {
-                    return b.level - a.level;
-                }
-                return sortOrder === 'asc' ? a.timestamp - b.timestamp : b.timestamp - a.timestamp;
-            });
-            return {
-                key,
-                title: group.title,
-                events: group.events,
-                startIndex: 0,
-            };
-        });
+        return groupEvents(filteredEvents, sortOrder);
     }, [filteredEvents, sortOrder]);
 
     const groupStartIndices = useMemo(() => {
@@ -172,14 +124,8 @@ export function useMemoryStream() {
     }, [groupedEvents]);
 
     const filteredEntities = useMemo(() => {
-        if (!searchQuery.trim()) return entities;
-        const q = searchQuery.toLowerCase();
-        return entities.filter(e =>
-            e.name.toLowerCase().includes(q) ||
-            e.aliases?.some((a: string) => a.toLowerCase().includes(q)) ||
-            e.description?.toLowerCase().includes(q)
-        );
-    }, [entities, searchQuery]);
+        return filterEntities(entities, pendingEntityChanges, searchQuery);
+    }, [entities, pendingEntityChanges, searchQuery]);
 
     const selectedEvent = useMemo(() => {
         const event = events.find(e => e.id === selectedId);
@@ -243,7 +189,7 @@ export function useMemoryStream() {
             newMap.set(id, { ...existing, ...updates });
             return newMap;
         });
-        setEvents(prev => prev.map(e => e.id === id ? { ...e, ...updates } as EventNode : e));
+        // 移除 setEvents 污染源数组的逻辑
     }, []);
 
     const handleEntityChange = useCallback((id: string, updates: Partial<EntityNode>) => {
@@ -253,7 +199,7 @@ export function useMemoryStream() {
             newMap.set(id, { ...existing, ...updates });
             return newMap;
         });
-        setEntities(prev => prev.map(e => e.id === id ? { ...e, ...updates } as EntityNode : e));
+        // 移除 setEntities 污染源数组的逻辑
     }, []);
 
     const handleBatchSave = useCallback(async () => {
@@ -377,6 +323,11 @@ export function useMemoryStream() {
 
 
     const handleOpenImportModal = useCallback(async () => {
+        if (hasChanges) {
+            if (!confirm('您有未保存的编辑内容，导入历史记忆库并合并可能覆盖您刚刚的修改，确定要继续吗？')) {
+                return;
+            }
+        }
         try {
             const Dexie = (await import('dexie')).default;
             const names = await Dexie.getDatabaseNames();

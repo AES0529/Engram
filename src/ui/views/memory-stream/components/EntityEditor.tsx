@@ -117,7 +117,8 @@ export const EntityEditor = forwardRef<EntityEditorHandle, EntityEditorProps>(({
             parsedProfile = JSON.parse(profileJson);
         } catch (e) {
             console.error('JSON Parse Error during sync', e);
-            // Don't sync invalid JSON, or maybe just ignore profile update
+            // 🐛 P0 Bugfix: 如果 JSON 有语法错误，直接阻断提交，绝不使用 `{}` 覆盖原数据
+            return;
         }
 
         const updates: Partial<EntityNode> = {

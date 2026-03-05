@@ -311,8 +311,9 @@ class BatchProcessor {
         await summarizerService.setLastSummarizedFloor(task.floorRange.start);
         const result = await summarizerService.triggerSummary(true);
         if (!result) {
-            // Strict Mode: summary 失败不能简单跳过，必须报错，交由上层标记 error 并 continue
-            throw new Error(`Summary task failed for range ${task.floorRange.start}-${task.floorRange.end}`);
+            // 🐛 P3 Bugfix: 统一批处理异常策略，不再硬抛 Error 导致流程外部难以分辨，统一记录状态并继续
+            Logger.warn(LogModule.BATCH, `Summary task skipped/failed for range ${task.floorRange.start}-${task.floorRange.end}`);
+            task.status = 'skipped';
         }
     }
 
