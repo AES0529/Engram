@@ -1,9 +1,9 @@
 
-import React from 'react';
 import type { RecallConfig, RerankConfig } from '@/config/types/rag';
-import { NumberField, SwitchField } from '@/ui/components/form/FormComponents';
 import { Switch } from '@/ui/components/core/Switch';
-import { Network, Database, BrainCircuit, Zap, AlertTriangle, Layers, Sliders, Sparkles } from 'lucide-react';
+import { NumberField } from '@/ui/components/form/FormComponents';
+import { AlertTriangle, BrainCircuit, Database, Layers, Network, Sliders, Sparkles, Zap } from 'lucide-react';
+import React from 'react';
 
 interface RecallConfigFormProps {
     config: RecallConfig;
@@ -49,21 +49,26 @@ export const RecallConfigForm: React.FC<RecallConfigFormProps> = ({ config, onCh
                 </h3>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* 暴力召回 */}
-                    <div className={`p-4 rounded-lg border transition-all ${config.useBruteForce ? 'bg-primary/5 border-primary/30' : 'bg-card border-border/50 hover:border-border'}`}>
+                    {/* Agentic RAG */}
+                    <div className={`p-4 rounded-lg border transition-all overflow-hidden ${config.useAgenticRAG ? 'bg-primary/5 border-primary/30' : 'bg-card border-border/50 hover:border-border'}`}>
                         <div className="flex items-start justify-between mb-2">
                             <div className="flex items-center gap-2 text-sm font-medium">
-                                <Zap size={16} className={config.useBruteForce ? 'text-primary' : 'text-muted-foreground'} />
-                                暴力召回 (Brute Force)
+                                <Zap size={16} className={config.useAgenticRAG ? 'text-primary' : 'text-muted-foreground'} />
+                                Agentic RAG
                             </div>
                             <Switch
-                                checked={config.useBruteForce}
-                                onChange={(val) => updateConfig({ useBruteForce: val })}
+                                checked={config.useAgenticRAG}
+                                onChange={(val) => updateConfig({ useAgenticRAG: val })}
                             />
                         </div>
-                        <p className="text-xs text-muted-foreground leading-relaxed">
-                            不使用向量检索，直接基于滚动窗口读取最近的事件。可作为兜底策略。
+                        <p className="text-xs text-muted-foreground leading-relaxed break-words">
+                            LLM 裁判式召回：阅读记忆目录后精准选出需要调阅的档案 ID，跳过向量检索。需要预处理模板配合。
                         </p>
+                        {config.useAgenticRAG && (
+                            <p className="text-[10px] text-value mt-2 leading-relaxed break-words">
+                                💡 Agentic 模式不依赖向量检索，可关闭「向量检索」开关。Trim 精简功能独立运行，不受影响。
+                            </p>
+                        )}
                     </div>
 
                     {/* 向量检索 */}

@@ -4,9 +4,6 @@ category: summary
 enabled: true
 injectionMode: replace
 userPromptTemplate: |
-  **角色设定**:
-  {{context}}
-
   **用户人设**:
   {{userPersona}}
 

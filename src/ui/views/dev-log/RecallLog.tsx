@@ -67,11 +67,13 @@ const LogListItem: React.FC<LogListItemProps> = ({ entry, isSelected, onSelect }
         >
             {/* 头部：标签 + 时间 */}
             <div className="flex items-center gap-2 mb-1">
-                <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${entry.mode === 'hybrid'
-                    ? 'bg-purple-500/20 text-purple-400'
-                    : 'bg-blue-500/20 text-blue-400'
+                <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium ${entry.mode === 'agentic'
+                    ? 'bg-amber-500/20 text-amber-400'
+                    : entry.mode === 'hybrid'
+                        ? 'bg-purple-500/20 text-purple-400'
+                        : 'bg-blue-500/20 text-blue-400'
                     }`}>
-                    {entry.mode === 'hybrid' ? '混合' : 'Embed'}
+                    {entry.mode === 'agentic' ? 'Agentic' : entry.mode === 'hybrid' ? '混合' : 'Embed'}
                 </span>
                 <span className="text-[10px] text-muted-foreground">
                     {entry.stats.rerankCount}/{entry.stats.topKCount} 条
@@ -83,7 +85,7 @@ const LogListItem: React.FC<LogListItemProps> = ({ entry, isSelected, onSelect }
             </div>
 
             {/* 查询预览 */}
-            <p className="text-sm text-foreground line-clamp-2">
+            <p className="text-sm text-foreground/90 break-words whitespace-pre-wrap">
                 {entry.query}
             </p>
 
@@ -164,7 +166,7 @@ const ResultItem: React.FC<{ item: RecallResultItem }> = ({ item }) => {
             </div>
 
             {/* 摘要 */}
-            <p className={`text-sm text-foreground ${expanded ? '' : 'line-clamp-2'}`}>
+            <p className={`text-sm text-foreground/90 break-words whitespace-pre-wrap ${expanded ? '' : 'line-clamp-2'}`}>
                 {item.summary}
             </p>
 
@@ -177,6 +179,11 @@ const ResultItem: React.FC<{ item: RecallResultItem }> = ({ item }) => {
                     )}
                     {item.hybridScore != null && (
                         <ScoreBar label="Hybrid" score={item.hybridScore} color="bg-purple-500" />
+                    )}
+                    {item.reason && (
+                        <div className="mt-2 text-xs text-muted-foreground italic">
+                            💬 {item.reason}
+                        </div>
                     )}
                 </div>
             )}
@@ -261,16 +268,18 @@ const DetailPanel: React.FC<DetailPanelProps> = ({ entry, isFullScreen, onClose 
             {/* 头部信息 */}
             <div className="mb-4 pb-4 border-b border-border shrink-0">
                 <div className="flex items-center gap-2 mb-2">
-                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${entry.mode === 'hybrid'
-                        ? 'bg-purple-500/20 text-purple-400'
-                        : 'bg-blue-500/20 text-blue-400'
+                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${entry.mode === 'agentic'
+                        ? 'bg-amber-500/20 text-amber-400'
+                        : entry.mode === 'hybrid'
+                            ? 'bg-purple-500/20 text-purple-400'
+                            : 'bg-blue-500/20 text-blue-400'
                         }`}>
-                        {entry.mode === 'hybrid' ? '混合召回' : '向量召回'}
+                        {entry.mode === 'agentic' ? 'Agentic 召回' : entry.mode === 'hybrid' ? '混合召回' : '向量召回'}
                     </span>
                     <span className="text-xs text-muted-foreground">{formatTime(entry.timestamp)}</span>
                 </div>
 
-                <p className="text-sm text-foreground mb-2">{entry.query}</p>
+                <p className="text-sm text-foreground/90 break-words whitespace-pre-wrap mb-2">{entry.query}</p>
 
                 {entry.preprocessedQuery && entry.preprocessedQuery !== entry.query && (
                     <p className="text-xs text-muted-foreground">

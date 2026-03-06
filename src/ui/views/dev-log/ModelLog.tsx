@@ -54,6 +54,31 @@ const LogCard: React.FC<{
     received?: ModelLogEntry;
 }> = ({ sent, received }) => {
     const [expanded, setExpanded] = useState(false);
+    const [calcSentTokens, setCalcSentTokens] = useState<number | null>(null);
+    const [calcRecvTokens, setCalcRecvTokens] = useState<number | null>(null);
+
+    // 动态计算 Token
+    useEffect(() => {
+        if (!expanded) return;
+
+        const countTokens = async () => {
+            try {
+                const { WorldInfoService } = await import('@/integrations/tavern/worldbook');
+                if (!sent.tokensSent && (sent.systemPrompt || sent.userPrompt)) {
+                    const t1 = sent.systemPrompt ? await WorldInfoService.countTokens(sent.systemPrompt) : 0;
+                    const t2 = sent.userPrompt ? await WorldInfoService.countTokens(sent.userPrompt) : 0;
+                    setCalcSentTokens(t1 + t2);
+                }
+                if (received?.response && !received.tokensReceived) {
+                    const t = await WorldInfoService.countTokens(received.response);
+                    setCalcRecvTokens(t);
+                }
+            } catch (e) {
+                console.warn('Failed to count tokens', e);
+            }
+        };
+        countTokens();
+    }, [sent, received, expanded]);
 
     const typeConfig = TYPE_LABELS[sent.type];
 
@@ -103,9 +128,9 @@ const LogCard: React.FC<{
                         <div className="flex items-center gap-2 mb-2 text-sm font-medium text-blue-400">
                             <Send size={14} />
                             发送
-                            {sent.tokensSent && (
+                            {(sent.tokensSent || calcSentTokens !== null) && (
                                 <span className="text-xs text-muted-foreground ml-auto">
-                                    ~{sent.tokensSent} tokens
+                                    ~{sent.tokensSent || calcSentTokens} tokens
                                 </span>
                             )}
                         </div>
@@ -134,9 +159,9 @@ const LogCard: React.FC<{
                         <div className="flex items-center gap-2 mb-2 text-sm font-medium text-green-400">
                             <Bot size={14} />
                             接收
-                            {received?.tokensReceived && (
+                            {(received?.tokensReceived || calcRecvTokens !== null) && (
                                 <span className="text-xs text-muted-foreground ml-auto">
-                                    ~{received.tokensReceived} tokens
+                                    ~{received?.tokensReceived || calcRecvTokens} tokens
                                 </span>
                             )}
                         </div>

@@ -22,7 +22,7 @@ import type { PreprocessingConfig } from '@/modules/preprocessing/types';
 import { DEFAULT_PREPROCESSING_CONFIG } from '@/modules/preprocessing/types';
 import { Switch } from '@/ui/components/core/Switch';
 import { FloatingPanel } from '@/ui/components/overlay/FloatingPanel';
-import { AlertCircle, Search, Wand2 } from 'lucide-react';
+import { AlertCircle, BrainCircuit, Clapperboard, Paintbrush, Search, Wand2, type LucideIcon } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 interface QuickPanelProps {
@@ -44,6 +44,14 @@ export function QuickPanel({ isOpen, onClose }: QuickPanelProps) {
     // 计算当前的启用状态
     const isIdsEnabled = config.enabled && (recallConfig?.usePreprocessing ?? false);
 
+    // 内置预处理模板的专属图标映射
+    const BUILTIN_ICON_MAP: Record<string, LucideIcon> = {
+        builtin_query_enhance: Search,
+        builtin_plot_director: Clapperboard,
+        builtin_description_enhance: Paintbrush,
+        builtin_agentic_recall: BrainCircuit,
+    };
+
     const availableModes = useMemo(() => {
         return templates
             .filter((t: any) => t.category === 'preprocessing')
@@ -51,7 +59,7 @@ export function QuickPanel({ isOpen, onClose }: QuickPanelProps) {
                 id: t.id,
                 name: t.name,
                 description: t.userPromptTemplate.slice(0, 30).replace(/\n/g, ' ') + '...',
-                icon: Wand2,
+                icon: BUILTIN_ICON_MAP[t.id] || Wand2,
             }));
     }, [templates]);
 

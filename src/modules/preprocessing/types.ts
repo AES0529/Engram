@@ -3,11 +3,11 @@
  * 输入预处理系统类型定义
  */
 
-import { PreprocessingConfig, DEFAULT_PREPROCESSING_CONFIG } from '@/config/types/data_processing';
+import { DEFAULT_PREPROCESSING_CONFIG, PreprocessingConfig } from '@/config/types/data_processing';
 
 // 重新导出以便模块内其他文件使用
-export type { PreprocessingConfig };
 export { DEFAULT_PREPROCESSING_CONFIG };
+export type { PreprocessingConfig };
 
 /** 预处理模式 */
 type PreprocessingMode =
@@ -15,6 +15,16 @@ type PreprocessingMode =
     | 'plot_director'    // 剧情构思
     | 'description'      // 描写增强
     | 'custom';          // 自定义
+
+/** Agentic RAG 召回条目 */
+export interface AgenticRecall {
+    /** 事件短 UUID (如 evt_a1b2c3d4) */
+    id: string;
+    /** LLM 赋予的重要性评分 (0.0 - 1.0) */
+    score: number;
+    /** 召回理由 */
+    reason: string;
+}
 
 /** 预处理结果 */
 export interface PreprocessingResult {
@@ -28,6 +38,8 @@ export interface PreprocessingResult {
     rawOutput: string;
     /** 召回的事件 ID (Query 增强模式) */
     recalledIds?: string[];
+    /** Agentic RAG: <recall_decision> 解析结果 */
+    agenticRecalls?: AgenticRecall[];
     /** 处理耗时 (ms) */
     processingTime: number;
     /** 错误信息 */

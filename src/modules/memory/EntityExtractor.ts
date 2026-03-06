@@ -9,6 +9,7 @@
 import { SettingsManager } from '@/config/settings';
 import { DEFAULT_ENTITY_CONFIG } from '@/config/types/defaults';
 import type { EntityExtractConfig } from '@/config/types/memory';
+import { EventBus } from '@/core/events';
 import { eventWatcher } from '@/core/events/EventWatcher';
 import { Logger, LogModule } from '@/core/logger';
 import { chatManager } from '@/data/ChatManager';
@@ -82,10 +83,7 @@ export class EntityBuilder {
      * Handle message received event
      */
     private async handleMessageReceived(): Promise<void> {
-        // dynamic import to avoid circular dependency if needed, though chatManager is already imported
-        const { chatManager } = await import('@/data/ChatManager');
-        const { MacroService } = await import('@/integrations/tavern');
-
+        // Fix P1: 移除无意义的 await import 微任务，直接使用顶部已导入的单例
         const currentFloor = MacroService.getCurrentMessageCount();
         const state = await chatManager.getState();
         const lastExtracted = state.last_extracted_floor || 0;
@@ -136,8 +134,20 @@ export class EntityBuilder {
         }
 
         // V0.9.13: 使用增量触发 (Delta) 而非整除触发 (Modulo)
-        // 只要未提取的楼层数超过间隔，就触发
         const pendingFloors = currentFloor - lastExtractedFloor;
+
+        // Fix P0: 楼层回溯 Bug 保护
+        // 如果 pendingFloors < 0，说明用户在酒馆进行了删回车操作，导致 currentFloor 变小
+        if (pendingFloors < 0) {
+            Logger.warn(LogModule.MEMORY_ENTITY, '检测到楼层回溯，重置 last_extracted_floor', { currentFloor, lastExtractedFloor });
+            // 同步将状态向后重置对齐，避免永久不触发
+            chatManager.updateState({ last_extracted_floor: currentFloor }).catch(e => {
+                Logger.error(LogModule.MEMORY_ENTITY, '回溯重置状态失败', { error: e });
+            });
+            return false;
+        }
+
+        // 只要未提取的楼层数超过间隔，就触发
         return pendingFloors >= this.config.floorInterval;
     }
 
@@ -178,7 +188,7 @@ export class EntityBuilder {
             const globalSettings = SettingsManager.get('summarizerConfig');
             const previewEnabled = manual || (globalSettings?.previewEnabled ?? true);
 
-            const context = await WorkflowEngine.run(createEntityWorkflow(), {
+            const contextPromise = WorkflowEngine.run(createEntityWorkflow(), {
                 trigger: manual ? 'manual' : 'auto',
                 config: {
                     dryRun,
@@ -194,6 +204,13 @@ export class EntityBuilder {
                     chatHistory // Pass raw string as optimization
                 }
             });
+
+            // Fix P2: 死锁保镖，增加 60 秒超时机制，防底层 LLM/Workflow 死锁
+            const timeoutPromise = new Promise<any>((_, reject) => {
+                setTimeout(() => reject(new Error('实体提取超时 (60s Watchdog)')), 60000);
+            });
+
+            const context = await Promise.race([contextPromise, timeoutPromise]);
 
             const result = context.output; // From SaveEntity
 
@@ -246,6 +263,11 @@ export class EntityBuilder {
             if (manual) {
                 notificationService.error(`实体提取异常: ${errorMsg}`, 'Engram 错误');
             }
+            // Fix P3: 抛出事件以供其他模块感知和处理
+            EventBus.emit({
+                type: 'WORKFLOW_FAILED',
+                payload: { workflowName: 'EntityWorkflow', error: e }
+            });
             return { success: false, newEntities: [], updatedEntities: [], error: errorMsg };
         } finally {
             this.isExtracting = false;

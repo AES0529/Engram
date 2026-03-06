@@ -236,6 +236,7 @@ class Injector {
 
             let finalOutput = userInput;
             let queries: string[] = [];
+            let preprocessResult: import('@/modules/preprocessing/types').PreprocessingResult | null = null;
 
             try {
                 // 1. 预处理 (如果启用 且 自动触发开启)
@@ -245,26 +246,26 @@ class Injector {
                         MacroService.setUserInput(userInput);
                         await MacroService.refreshCache();
 
-                        const result = await preprocessor.process(userInput);
+                        preprocessResult = await preprocessor.process(userInput);
 
-                        if (result.success && result.output) {
+                        if (preprocessResult.success && preprocessResult.output) {
                             Logger.success(LogModule.RAG_INJECT, '预处理完成', {
-                                outputLength: result.output.length,
+                                outputLength: preprocessResult.output.length,
                             });
                             // 根据模板的注入模式决定如何组合
                             const template = SettingsManager.getPromptTemplateById(preprocessorConfig.templateId);
                             const mode = template?.injectionMode || 'replace';
 
                             if (mode === 'append') {
-                                finalOutput = `${userInput}\n\n${result.output}`;
+                                finalOutput = `${userInput}\n\n${preprocessResult.output}`;
                             } else if (mode === 'prepend') {
-                                finalOutput = `${result.output}\n\n${userInput}`;
+                                finalOutput = `${preprocessResult.output}\n\n${userInput}`;
                             } else {
-                                finalOutput = result.output;
+                                finalOutput = preprocessResult.output;
                             }
 
-                            if (result.query) {
-                                queries.push(result.query);
+                            if (preprocessResult.query) {
+                                queries.push(preprocessResult.query);
                             }
                         } else {
                             Logger.warn(LogModule.RAG_INJECT, '预处理未返回有效结果，使用原始输入');
@@ -278,29 +279,52 @@ class Injector {
                 // 2. RAG 召回 (如果启用)
                 if (recallConfig.enabled) {
                     try {
-                        // [Optimized] 检查是否有向量化数据
-                        const hasVectorData = await retriever.hasVectorizedNodes();
-                        if (!hasVectorData) {
-                            Logger.debug(LogModule.RAG_INJECT, '未检测到向量化数据，跳过 RAG');
-                        } else {
-                            Logger.debug(LogModule.RAG_INJECT, '执行 RAG 召回');
+                        let ragHandled = false;
 
-                            // 执行检索 (Retriever 内部会根据 recallConfig 处理策略)
-                            const recallResult = await retriever.search(
-                                userInput,
-                                queries.length > 0 ? queries : undefined
-                            );
-
-                            if (recallResult.nodes.length > 0) {
-                                Logger.success(LogModule.RAG_INJECT, 'RAG 召回完成', {
-                                    nodeCount: recallResult.nodes.length,
+                        // 2a. Agentic RAG (优先路径)
+                        if (recallConfig.useAgenticRAG && preprocessResult?.agenticRecalls && preprocessResult.agenticRecalls.length > 0) {
+                            try {
+                                Logger.info(LogModule.RAG_INJECT, 'Agentic RAG: 执行 ID 直通检索', {
+                                    recallCount: preprocessResult.agenticRecalls.length,
                                 });
 
-                                // 刷新 MacroService 缓存，使 {{engramSummaries}} 包含召回结果
-                                // MacroService 内部会自动清洗 EJS
-                                await MacroService.refreshCacheWithNodes(recallResult.nodes);
+                                const agenticResult = await retriever.agenticSearch(preprocessResult.agenticRecalls);
+
+                                if (agenticResult.nodes.length > 0) {
+                                    Logger.success(LogModule.RAG_INJECT, 'Agentic RAG 召回完成', {
+                                        nodeCount: agenticResult.nodes.length,
+                                    });
+                                    await MacroService.refreshCacheWithNodes(agenticResult.nodes);
+                                    ragHandled = true;
+                                } else {
+                                    Logger.warn(LogModule.RAG_INJECT, 'Agentic RAG 无有效结果，尝试降级');
+                                }
+                            } catch (agenticErr) {
+                                Logger.warn(LogModule.RAG_INJECT, 'Agentic RAG 失败，降级到传统检索', agenticErr);
+                            }
+                        }
+
+                        // 2b. 传统 Embedding RAG (Agentic 未启用或降级后的 fallback)
+                        if (!ragHandled && recallConfig.useEmbedding) {
+                            const hasVectorData = await retriever.hasVectorizedNodes();
+                            if (!hasVectorData) {
+                                Logger.debug(LogModule.RAG_INJECT, '未检测到向量化数据，跳过 RAG');
                             } else {
-                                Logger.debug(LogModule.RAG_INJECT, 'RAG 无匹配结果');
+                                Logger.debug(LogModule.RAG_INJECT, '执行传统 RAG 召回');
+
+                                const recallResult = await retriever.search(
+                                    userInput,
+                                    queries.length > 0 ? queries : undefined
+                                );
+
+                                if (recallResult.nodes.length > 0) {
+                                    Logger.success(LogModule.RAG_INJECT, 'RAG 召回完成', {
+                                        nodeCount: recallResult.nodes.length,
+                                    });
+                                    await MacroService.refreshCacheWithNodes(recallResult.nodes);
+                                } else {
+                                    Logger.debug(LogModule.RAG_INJECT, 'RAG 无匹配结果');
+                                }
                             }
                         }
                     } catch (e) {

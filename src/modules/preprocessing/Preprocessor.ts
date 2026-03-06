@@ -134,6 +134,24 @@ class Preprocessor {
             const query = context.extractedTags?.query || null;
             const rawOutput = context.llmResponse?.content || '';
 
+            // Agentic RAG: 解析 <recall_decision> JSON
+            let agenticRecalls: import('./types').AgenticRecall[] | undefined;
+            const recallDecisionRaw = context.extractedTags?.recall_decision;
+            if (recallDecisionRaw) {
+                try {
+                    const { RobustJsonParser } = await import('@/core/utils/JsonParser');
+                    const parsed = RobustJsonParser.parse(recallDecisionRaw);
+                    if (parsed?.recalls && Array.isArray(parsed.recalls)) {
+                        agenticRecalls = parsed.recalls;
+                        Logger.info(LogModule.PREPROCESS, 'Agentic RAG 召回决策已解析', {
+                            count: agenticRecalls!.length,
+                        });
+                    }
+                } catch (parseErr) {
+                    Logger.warn(LogModule.PREPROCESS, 'recall_decision JSON 解析失败', parseErr);
+                }
+            }
+
             const processingTime = Date.now() - startTime;
             Logger.success(LogModule.PREPROCESS, '预处理完成', {
                 outputLength: output?.length || 0,
@@ -147,6 +165,7 @@ class Preprocessor {
                 output: output,
                 query: query,
                 rawOutput: rawOutput,
+                agenticRecalls,
                 processingTime,
             };
 

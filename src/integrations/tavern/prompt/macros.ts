@@ -131,9 +131,27 @@ export class MacroService {
                 'Engram: 实体状态 (角色/场景/物品)'
             );
 
+            // Agentic RAG: {{engramIndex}} - 双层 XML 目录索引
+            MacroService.registerMacro(
+                'engramIndex',
+                () => {
+                    return MacroService.cachedAgenticIndex;
+                },
+                'Engram: Agentic RAG 双层目录索引 (极简 structured_kv)'
+            );
+
+            // Agentic RAG: {{engramActiveEvents}} - 纯蓝灯事件
+            MacroService.registerMacro(
+                'engramActiveEvents',
+                () => {
+                    return MacroService.cachedPureActiveEvents;
+                },
+                'Engram: 纯蓝灯事件摘要 (不含绿灯召回)'
+            );
+
             this.isInitialized = true;
             Logger.success('MacroService', '全局宏已注册', {
-                macros: ['{{engramSummaries}}', '{{worldbookContext}}', '{{userInput}}', '{{chatHistory}}', '{{context}}', '{{engramGraph}}', '{{engramArchivedSummaries}}', '{{userPersona}}', '{{engramEntityStates}}']
+                macros: ['{{engramSummaries}}', '{{worldbookContext}}', '{{userInput}}', '{{chatHistory}}', '{{context}}', '{{engramGraph}}', '{{engramArchivedSummaries}}', '{{userPersona}}', '{{engramEntityStates}}', '{{engramIndex}}', '{{engramActiveEvents}}']
             });
 
             // 初始化缓存
@@ -169,6 +187,9 @@ export class MacroService {
         this.cachedUserPersona = '';
         this.cachedCustomMacros.clear();
         this.cachedEntityStates = '';
+        // Agentic RAG
+        this.cachedAgenticIndex = '';
+        this.cachedPureActiveEvents = '';
     }
 
     // --- 缓存 ---
@@ -185,6 +206,10 @@ export class MacroService {
     private static cachedCustomMacros: Map<string, string> = new Map();
     // V1.0.0: 实体状态缓存
     private static cachedEntityStates: string = '';
+    // Agentic RAG: 目录索引缓存
+    private static cachedAgenticIndex: string = '';
+    // Agentic RAG: 纯蓝灯事件缓存
+    private static cachedPureActiveEvents: string = '';
 
     /**
      * 获取缓存的事件摘要
@@ -269,7 +294,11 @@ export class MacroService {
             // 3. V1.0.0: 刷新实体状态
             this.cachedEntityStates = await store.getEntityStates();
 
-            // 4. 刷新图谱数据 (可选，视性能而定)
+            // 4. Agentic RAG: 刷新目录索引和纯蓝灯事件
+            this.cachedAgenticIndex = await store.getAgenticIndex();
+            this.cachedPureActiveEvents = await store.getPureActiveEvents();
+
+            // 5. 刷新图谱数据 (可选，视性能而定)
             // await this.refreshGraphCache();
 
             Logger.debug('MacroService', 'Engram DB 缓存已刷新', {

@@ -1,0 +1,99 @@
+import { SettingsManager } from '@/config/settings';
+import { DEFAULT_RECALL_CONFIG } from '@/config/types/defaults';
+import { Logger, LogModule } from '@/core/logger';
+import { tryGetDbForChat } from '@/data/db';
+import { getCurrentChatId } from '@/integrations/tavern';
+import { embeddingService } from '@/modules/rag/embedding/EmbeddingService';
+import { type ScoredEvent } from '@/modules/rag/retrieval/HybridScorer';
+import { JobContext } from '../../core/JobContext';
+import { IStep } from '../../core/Step';
+
+export class VectorRetrieveStep implements IStep {
+    name = 'VectorRetrieveStep';
+
+    async execute(context: JobContext): Promise<void> {
+        // Ensure context.data is initialized
+        context.data = context.data || {};
+
+        const query = context.input?.query as string;
+        const unifiedQueries = context.input?.unifiedQueries as string[] | undefined;
+
+        if (!query) {
+            throw new Error('VectorRetrieveStep: Missing query in context.input');
+        }
+
+        const apiSettings = SettingsManager.get('apiSettings');
+        const config = apiSettings?.recallConfig || DEFAULT_RECALL_CONFIG;
+
+        // 如果未启用向量检索，则跳过
+        if (!config.useEmbedding || !config.enabled) {
+            context.data.candidates = [];
+            return;
+        }
+
+        const startTime = Date.now(); // Renamed from vectorRetrieveStartTime
+        context.data.vectorRetrieveStartTime = startTime; // Keep for backward compatibility if needed
+
+        const chatId = getCurrentChatId();
+        if (!chatId) {
+            context.data.candidates = [];
+            return;
+        }
+
+        const db = tryGetDbForChat(chatId);
+        if (!db) {
+            context.data.candidates = [];
+            return;
+        }
+
+        // 获取所有已嵌入的事件
+        const events = await db.events
+            .filter(e => !!e.embedding && e.embedding.length > 0)
+            .toArray();
+
+        // 获取查询的嵌入向量
+        let queryVector: number[];
+
+        try {
+            // V1.0.3: 优先使用 unifiedQueries 第一条，否则使用 userInput
+            const searchQuery = unifiedQueries && unifiedQueries.length > 0 ? unifiedQueries[0] : query;
+            queryVector = await embeddingService.embed(searchQuery);
+        } catch (e: any) {
+            Logger.warn(LogModule.RAG_RETRIEVE, '生成查询向量失败', { error: e.message });
+            context.data.candidates = [];
+            return;
+        }
+
+        // 计算相似度
+        const candidates: ScoredEvent[] = [];
+        for (const event of events) {
+            if (event.embedding && event.embedding.length > 0) {
+                const similarity = embeddingService.cosineSimilarity(queryVector, event.embedding);
+                const threshold = config.embedding?.minScoreThreshold ?? 0.3;
+                if (similarity >= threshold) {
+                    candidates.push({
+                        id: event.id,
+                        summary: event.summary,
+                        embeddingScore: similarity,
+                        node: event,
+                    });
+                }
+            }
+        }
+
+        // 按相似度降序排序
+        const sortedCandidates = candidates.sort((a, b) => (b.embeddingScore || 0) - (a.embeddingScore || 0));
+
+        // 截取 Top K (在 HybridPipeline 中可以稍微多取一点供 Rerank，但这里为了保持一致先按配置)
+        // 注意：hybridSearch 原始逻辑中如果后续有 rerank 会传给 rerank，因此多保留些可能是好的。
+        // 但原始代码直接 slice(0, topK)。我们沿用它。
+        const topK = config.embedding?.topK || 20;
+        context.data.candidates = sortedCandidates.slice(0, topK);
+        context.data.embeddingTime = Date.now() - startTime; // New field
+        context.data.vectorRetrieveTime = context.data.embeddingTime; // Keep for backward compatibility if needed
+        context.data.vectorConfig = config.embedding; // New field
+        context.data.recallConfig = config;
+
+        Logger.debug(LogModule.RAG_RETRIEVE, `向量检索完成，得到 ${context.data.candidates.length} 个候选`);
+    }
+}

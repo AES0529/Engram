@@ -3,8 +3,8 @@ import { ChevronDown, Search, X } from 'lucide-react';
 import React, { useEffect, useRef, useState } from 'react';
 
 interface FormSectionProps {
-    title: string;
-    description?: string;
+    title: string | React.ReactNode;
+    description?: string | React.ReactNode;
     children: React.ReactNode;
     className?: string;
     collapsible?: boolean;
@@ -48,8 +48,8 @@ export const FormSection: React.FC<FormSectionProps> = ({
 };
 
 interface BaseFieldProps {
-    label: string;
-    description?: string;
+    label: string | React.ReactNode;
+    description?: string | React.ReactNode;
     error?: string;
     required?: boolean;
     className?: string;

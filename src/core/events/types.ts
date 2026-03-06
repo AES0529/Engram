@@ -5,7 +5,7 @@
  * 用于模块间的松耦合通信
  */
 
-import { Subject, Observable, filter } from 'rxjs';
+import { Observable, Subject, filter } from 'rxjs';
 
 // 事件类型定义
 export type EngramEventType =
@@ -17,7 +17,8 @@ export type EngramEventType =
     | 'MEMORY_STORED'
     | 'RETRIEVAL_START'
     | 'RETRIEVAL_COMPLETE'
-    | 'UI_NAVIGATE_REQUEST';  // V0.9.10: 通知系统触发 UI 跳转
+    | 'UI_NAVIGATE_REQUEST' // V0.9.10: 通知系统触发 UI 跳转
+    | 'WORKFLOW_FAILED';
 
 export interface EngramEvent<T = unknown> {
     type: EngramEventType;

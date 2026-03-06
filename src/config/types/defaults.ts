@@ -66,7 +66,7 @@ export const DEFAULT_RECALL_CONFIG: RecallConfig = {
     useEmbedding: true,
     useRerank: false,
     usePreprocessing: false,
-    useBruteForce: false,
+    useAgenticRAG: false,
     embedding: {
         topK: 50,               // Embedding 初筛 50 条
         minScoreThreshold: 0.35, // 过滤阈值 (稍高，过滤不相关)

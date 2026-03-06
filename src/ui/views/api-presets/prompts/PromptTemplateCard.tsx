@@ -4,7 +4,7 @@ import { PROMPT_CATEGORIES } from '@/config/types/prompt';
 import { Logger, LogModule } from '@/core/logger';
 import { notificationService } from '@/ui/services/NotificationService';
 import { dump, load } from 'js-yaml';
-import { Check, Copy, Download, FolderInput, Power, RotateCcw, Trash2 } from 'lucide-react';
+import { BrainCircuit, Clapperboard, Copy, Download, FolderInput, Paintbrush, Power, RotateCcw, Search, Trash2, Wand2, type LucideIcon } from 'lucide-react';
 import React, { useRef } from 'react';
 
 interface PromptTemplateCardProps {
@@ -166,14 +166,24 @@ export const PromptTemplateCard: React.FC<PromptTemplateCardProps> = ({
                         <Power size={16} />
                     </button>
                 ) : (
-                    // 预处理模板始终显示为"就绪"状态
-                    <div
-                        className="w-8 h-8 flex items-center justify-center rounded-lg bg-value/10 text-value flex-shrink-0"
-                        title="预处理模板 (在快捷面板中激活)"
-                    >
-                        <Check size={16} />
-                    </div>
-                )}
+                    // 预处理模板：内置模板使用专属图标，自建模板用通用图标
+                    (() => {
+                        const BUILTIN_ICON_MAP: Record<string, LucideIcon> = {
+                            builtin_query_enhance: Search,
+                            builtin_plot_director: Clapperboard,
+                            builtin_description_enhance: Paintbrush,
+                            builtin_agentic_recall: BrainCircuit,
+                        };
+                        const Icon = BUILTIN_ICON_MAP[template.id] || Wand2;
+                        return (
+                            <div
+                                className="w-8 h-8 flex items-center justify-center rounded-lg bg-value/10 text-value flex-shrink-0"
+                                title="预处理模板 (在快捷面板中激活)"
+                            >
+                                <Icon size={16} />
+                            </div>
+                        );
+                    })())}
 
                 <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2">

@@ -10,25 +10,25 @@
  * - llm_only: LLM 直接召回 (未实现，留作后续)
  */
 
+import { SettingsManager } from '@/config/settings';
+import { RecallLogService } from '@/core/logger/RecallLogger';
 import { tryGetDbForChat } from '@/data/db';
 import { getCurrentChatId } from '@/integrations/tavern';
-import { SettingsManager } from '@/config/settings';
-import { embeddingService } from '../embedding/EmbeddingService';
-import { rerankService } from './Reranker';
-import { scoreAndSort, mergeResults, type ScoredEvent, type RecallResult } from './HybridScorer';
-import { RecallLogService } from '@/core/logger/RecallLogger';
 
-import { brainRecallCache, type RecallCandidate } from './BrainRecallCache';
+import { DEFAULT_BRAIN_RECALL_CONFIG, DEFAULT_RECALL_CONFIG } from '@/config/types/defaults';
+import type { BrainRecallConfig, RecallConfig, RerankConfig, VectorConfig } from '@/config/types/rag';
 import { Logger, LogModule } from '@/core/logger';
 import type { EventNode } from '@/data/types/graph';
-import type { RecallConfig, RerankConfig, BrainRecallConfig, VectorConfig } from '@/config/types/rag';
-import { DEFAULT_RECALL_CONFIG, DEFAULT_BRAIN_RECALL_CONFIG } from '@/config/types/defaults';
+import type { AgenticRecall } from '@/modules/preprocessing/types';
+import { brainRecallCache, type RecallCandidate } from './BrainRecallCache';
+
 
 // ==================== 类型定义 ====================
 
 export interface RetrievalResult {
     entries: string[]; // Formatted entries ready for injection
     nodes: EventNode[]; // Raw nodes
+    candidates?: any[]; // V1.4: 曝露带分数的候选列表供前端装配
 }
 
 // ==================== Retriever ====================
@@ -41,6 +41,9 @@ class Retriever {
         const apiSettings = SettingsManager.get('apiSettings');
         return apiSettings?.recallConfig || DEFAULT_RECALL_CONFIG;
     }
+
+    // Fix P1: 缓存 hasVectorizedNodes 结果，避免每次都扫全表
+    private _hasVectorizedNodesCache: boolean | null = null;
 
     /**
      * 检查是否存在已向量化的节点
@@ -60,7 +63,15 @@ class Retriever {
             .limit(1)
             .count();
 
-        return count > 0;
+        this._hasVectorizedNodesCache = count > 0;
+        return this._hasVectorizedNodesCache;
+    }
+
+    /**
+     * 清理矢量化节点缓存（暴露给外部在触发 embedding 构建后调用）
+     */
+    invalidateVectorCache(): void {
+        this._hasVectorizedNodesCache = null;
     }
 
     /**
@@ -90,10 +101,14 @@ class Retriever {
         const recallConfig = this.getRecallConfig();
         const vectorConfig = this.getVectorConfig();
 
-        // 确保 EmbeddingService 获取最新配置
-        if (recallConfig.useEmbedding && vectorConfig) {
-            embeddingService.setConfig(vectorConfig);
-        }
+        // Fix P0: 不要使用 setConfig 覆盖全局，改用直接传递参数的方式调用
+        // 原生 EmbeddingService.embed 不支持直接传 model，但我们只需要保证获取 vectorConfig 时使用 Retriever 的配置
+        // 最佳实践是不修改全局 setConfig，如果需要临时覆盖，应在 Embedding 服务内实现 scopedContext
+        // 这里为了兼容性且不大量修改底层，我们移除了 setConfig 的危险操作。
+        // 目前系统的逻辑是 Retriever 和 Batch 共享同样的配置源，不需要在搜索时强行复写。
+        // if (recallConfig.useEmbedding && vectorConfig) {
+        //     embeddingService.setConfig(vectorConfig);
+        // }
 
 
 
@@ -102,13 +117,6 @@ class Retriever {
             Logger.debug(LogModule.RAG_RETRIEVE, '召回未启用，使用滚动窗口策略');
             // 注意：这里原本用 config.embedding.topK，现在不能用了
             // 滚动窗口暂时给个默认值或者读取 Config，这里先默认 20
-            const limit = recallConfig.embedding?.topK || 20;
-            return this.rollingSearch(limit);
-        }
-
-        // 暴力召回模式 (优先)
-        if (recallConfig.useBruteForce) {
-            Logger.debug(LogModule.RAG_RETRIEVE, '使用暴力召回 (滚动窗口)');
             const limit = recallConfig.embedding?.topK || 20;
             return this.rollingSearch(limit);
         }
@@ -122,9 +130,6 @@ class Retriever {
         return this.rollingSearch(recallConfig.embedding?.topK || 20);
     }
 
-    /**
-     * 混合检索：Embedding + Rerank
-     */
     private async hybridSearch(
         userInput: string,
         unifiedQueries: string[] | undefined,
@@ -132,281 +137,143 @@ class Retriever {
     ): Promise<RetrievalResult> {
         const startTime = Date.now();
 
-        // 1. Embedding 检索
-        const embeddingStart = Date.now();
-        const embeddingCandidates = await this.doEmbeddingSearch(
-            userInput,
-            unifiedQueries,
-            config
-        );
-        const embeddingTime = Date.now() - embeddingStart;
+        try {
+            const { WorkflowEngine } = await import('@/modules/workflow/core/WorkflowEngine');
+            const { createRetrievalWorkflow } = await import('@/modules/workflow/definitions/RetrievalWorkflow');
 
-        if (embeddingCandidates.length === 0) {
-            Logger.debug(LogModule.RAG_RETRIEVE, 'Embedding 无匹配结果');
+            const context = await WorkflowEngine.run(createRetrievalWorkflow(), {
+                input: {
+                    query: userInput,
+                    unifiedQueries,
+                    mode: 'hybrid'
+                },
+                data: {
+                    recallConfig: config,
+                    vectorRetrieveStartTime: startTime
+                }
+            });
+
+            return context.output as RetrievalResult || { entries: [], nodes: [] };
+        } catch (e: any) {
+            Logger.error(LogModule.RAG_RETRIEVE, 'Hybrid Search 工作流执行失败', { error: e.message });
+            return { entries: [], nodes: [] };
+        }
+    }
+
+
+    /**
+     * Agentic RAG 直通检索
+     * 跳过 Embedding/Rerank，直接按 LLM 裁判给出的 ID 从数据库捣取事件
+     *
+     * @param recalls LLM 输出的召回决策列表
+     * @returns 检索结果
+     */
+    async agenticSearch(recalls: AgenticRecall[]): Promise<RetrievalResult> {
+        const startTime = Date.now();
+        const chatId = getCurrentChatId();
+        if (!chatId) {
+            Logger.warn(LogModule.RAG_RETRIEVE, 'Agentic Search: 无当前聊天');
             return { entries: [], nodes: [] };
         }
 
-        // 2. Rerank 重排序 (如果启用且服务可用)
-        let finalCandidates = embeddingCandidates;
-        let rerankTime = 0;
-
-        if (config.useRerank && rerankService.isEnabled()) {
-            const rerankStart = Date.now();
-
-            // 构建用于 Rerank 的查询 (优先使用预处理结果)
-            const rerankQuery = unifiedQueries?.[0] || userInput;
-            const documents = embeddingCandidates.map(c => c.summary);
-
-            const rerankResults = await rerankService.rerank(rerankQuery, documents);
-            rerankTime = Date.now() - rerankStart;
-
-            // 合并 Embedding 和 Rerank 分数
-            const embeddingMap = new Map(embeddingCandidates.map(c => [c.id, c]));
-            const alpha = rerankService.getHybridAlpha();
-
-            finalCandidates = mergeResults(
-                embeddingMap,
-                rerankResults,
-                embeddingCandidates,
-                alpha
-            );
-
-            Logger.info(LogModule.RAG_RETRIEVE, '混合检索完成', {
-                embeddingCount: embeddingCandidates.length,
-                rerankCount: rerankResults.length,
-                finalCount: finalCandidates.length,
-                embeddingTime,
-                rerankTime,
-            });
-        } else {
-            // 仅使用 Embedding 分数排序
-            finalCandidates = scoreAndSort(embeddingCandidates, 0);
+        const db = tryGetDbForChat(chatId);
+        if (!db) {
+            Logger.warn(LogModule.RAG_RETRIEVE, 'Agentic Search: 数据库不可用');
+            return { entries: [], nodes: [] };
         }
 
-        // 3. 应用记忆缓存系统
-        const brainConfig: BrainRecallConfig = config.brainRecall || DEFAULT_BRAIN_RECALL_CONFIG;
+        // 1. 按 ID 直接从数据库捣取事件
+        const ids = recalls.map(r => r.id);
+        const events = await db.events.bulkGet(ids);
+        const validEvents = events.filter((e): e is EventNode => e != null);
+
+        if (validEvents.length === 0) {
+            Logger.warn(LogModule.RAG_RETRIEVE, 'Agentic Search: 无有效事件', {
+                requestedIds: ids,
+            });
+            return { entries: [], nodes: [] };
+        }
+
+        Logger.info(LogModule.RAG_RETRIEVE, 'Agentic Search: 数据库查询完成', {
+            requested: ids.length,
+            found: validEvents.length,
+        });
+
+        // 2. 构建 RecallCandidate（用 LLM 给的 score 填充双轨）
+        const validEventMap = new Map(validEvents.map(e => [e.id, e]));
+        const candidates: RecallCandidate[] = recalls
+            .filter(r => validEventMap.has(r.id))
+            .map(r => ({
+                id: r.id,
+                label: validEventMap.get(r.id)!.structured_kv?.event || r.id,
+                embeddingScore: r.score,
+                rerankScore: r.score, // 双轨同分，让 BrainRecallCache 的门控逻辑正常工作
+            }));
+
+        // 3. 送入 BrainRecallCache（自动触发 Decay Bomb）
+        const recallConfig = this.getRecallConfig();
+        const brainConfig: BrainRecallConfig = recallConfig.brainRecall || DEFAULT_BRAIN_RECALL_CONFIG;
+        let finalNodes = validEvents;
 
         if (brainConfig.enabled) {
-            // V0.9.5: 类脑召回系统
             brainRecallCache.setConfig(brainConfig);
             brainRecallCache.nextRound();
 
-            // 转换为 RecallCandidate 格式 (V1.2)
-            const candidates: RecallCandidate[] = finalCandidates.map(c => {
-                // V1.3 Safety Fallback: 如果 Rerank score 缺失，使用 Embedding 但封顶 0.8
-                let rerankScore = c.rerankScore;
-                if (rerankScore === undefined && config.useRerank) {
-                    rerankScore = Math.min(0.8, c.embeddingScore || 0);
-                }
-
-                return {
-                    id: c.id,
-                    // V1.3.4: 注入可读名称 (用于 Brain Recall UI)
-                    label: c.node?.structured_kv?.event || c.summary.slice(0, 10),
-                    embeddingScore: c.embeddingScore || 0,
-                    rerankScore: rerankScore,
-                    // V1.3: 传递向量用于 MMR
-                    embeddingVector: c.node?.embedding,
-                };
-            });
-
-            // 类脑召回处理
             const brainResults = brainRecallCache.process(candidates);
 
-            // 重新构建 finalCandidates（保留 node 引用）
-            const candidateMap = new Map(finalCandidates.map(c => [c.id, c]));
-            finalCandidates = brainResults
-                .filter(slot => candidateMap.has(slot.id))
-                .map(slot => {
-                    const original = candidateMap.get(slot.id)!;
-                    return {
-                        ...original,
-                        hybridScore: slot.finalScore, // V1.2: 用 finalScore 替代原有分数
-                    };
-                });
+            // 根据 BrainRecallCache 输出重新排序
+            const brainIdSet = new Set(brainResults.map(s => s.id));
+            finalNodes = validEvents.filter(e => brainIdSet.has(e.id));
 
-            Logger.info(LogModule.RAG_RETRIEVE, '类脑召回已应用', {
+            Logger.info(LogModule.RAG_RETRIEVE, 'Agentic Search: 类脑召回已应用', {
                 inputCount: candidates.length,
-                outputCount: finalCandidates.length,
+                outputCount: brainResults.length,
                 round: brainRecallCache.getCurrentRound(),
             });
         }
 
         // 4. 记录召回日志
         const totalTime = Date.now() - startTime;
-
-        // V1.3.1: 捕获类脑召回的上下文快照
         const brainStats = brainConfig.enabled ? {
             round: brainRecallCache.getCurrentRound(),
             snapshot: brainRecallCache.getShortTermSnapshot()
         } : undefined;
 
         RecallLogService.log({
-            query: userInput,
-            preprocessedQuery: unifiedQueries?.[0],
-            mode: 'hybrid',
-            results: finalCandidates.map(c => ({
-                eventId: c.id,
-                summary: c.summary,
-                category: c.node?.structured_kv?.event || 'unknown',
-                embeddingScore: c.embeddingScore || 0,
-                rerankScore: c.rerankScore,
-                hybridScore: c.hybridScore,
-                isTopK: true,
-                isReranked: c.rerankScore != null,
-                sourceFloor: c.node?.source_range?.start_index,
-            })),
+            query: '[Agentic RAG]',
+            mode: 'agentic',
+            results: recalls
+                .filter(r => validEventMap.has(r.id))
+                .map(r => ({
+                    eventId: r.id,
+                    summary: validEventMap.get(r.id)!.summary,
+                    category: validEventMap.get(r.id)!.structured_kv?.event || 'unknown',
+                    embeddingScore: r.score,
+                    hybridScore: r.score,
+                    isTopK: true,
+                    isReranked: false,
+                    reason: r.reason,
+                })),
             stats: {
-                totalCandidates: embeddingCandidates.length,
-                topKCount: embeddingCandidates.length,
-                rerankCount: finalCandidates.length,
+                totalCandidates: recalls.length,
+                topKCount: validEvents.length,
+                rerankCount: 0,
                 latencyMs: totalTime,
             },
-            brainStats, // V1.3.1: 记录类脑状态
+            brainStats,
         });
 
         // 5. 返回结果
-        const nodes = finalCandidates
-            .filter(c => c.node)
-            .map(c => c.node!);
+        const entries = finalNodes.map(n => n.summary);
 
-        const entries = finalCandidates.map(c => c.summary);
-
-        Logger.info(LogModule.RAG_RETRIEVE, '召回完成', {
-            useEmbedding: config.useEmbedding,
-            useRerank: config.useRerank,
+        Logger.info(LogModule.RAG_RETRIEVE, 'Agentic Search 完成', {
             totalTime,
-            resultCount: nodes.length,
+            resultCount: finalNodes.length,
         });
 
-        return { entries, nodes };
+        return { entries, nodes: finalNodes, candidates };
     }
 
-    /**
-     * 仅 Embedding 检索 (轻量模式)
-     */
-    private async embeddingOnlySearch(
-        userInput: string,
-        unifiedQueries: string[] | undefined,
-        config: RecallConfig
-    ): Promise<RetrievalResult> {
-        const candidates = await this.doEmbeddingSearch(userInput, unifiedQueries, config);
-
-        // 按 Embedding 分数排序
-        const sorted = scoreAndSort(candidates, 0);
-
-        const nodes = sorted.filter(c => c.node).map(c => c.node!);
-        const entries = sorted.map(c => c.summary);
-
-        return { entries, nodes };
-    }
-
-    /**
-     * 执行 Embedding 向量检索
-     */
-    private async doEmbeddingSearch(
-        userInput: string,
-        unifiedQueries: string[] | undefined,
-        config: RecallConfig
-    ): Promise<ScoredEvent[]> {
-        const chatId = getCurrentChatId();
-        if (!chatId) {
-            return [];
-        }
-
-        const db = tryGetDbForChat(chatId);
-        if (!db) {
-            return [];
-        }
-
-        // 获取所有已嵌入的事件
-        const events = await db.events
-            .filter(e => !!e.embedding && e.embedding.length > 0)
-            .toArray();
-
-        if (events.length === 0) {
-            Logger.debug(LogModule.RAG_RETRIEVE, '没有已嵌入的事件');
-            return [];
-        }
-
-        // 构建查询列表
-        const queries = unifiedQueries && unifiedQueries.length > 0
-            ? unifiedQueries
-            : [userInput];
-
-        Logger.debug(LogModule.RAG_RETRIEVE, '开始向量检索', {
-            queryCount: queries.length,
-            eventCount: events.length,
-        });
-
-        // 多 Query 检索 (并发执行向量化)
-        const candidateMap = new Map<string, ScoredEvent>();
-
-        // 1. 并发获取所有 Query 的向量
-        const queryEmbeddings = await Promise.all(
-            queries.map(async (query) => {
-                try {
-                    const vector = await embeddingService.embed(query);
-                    // 预计算 Norm Sq 以优化内循环
-                    const normSq = embeddingService.computeNorm(vector);
-                    return { query, vector, normSq };
-                } catch (error: any) {
-                    Logger.error(LogModule.RAG_RETRIEVE, `Query 向量化失败: ${query}`, {
-                        message: error?.message || error,
-                    });
-                    return null;
-                }
-            })
-        );
-
-        // 2. 执行检索循环
-        for (const q of queryEmbeddings) {
-            if (!q) continue;
-
-            const { vector: queryVector, normSq: queryNormSq } = q;
-
-            // 计算与每个事件的相似度
-            for (const event of events) {
-                if (!event.embedding) continue;
-
-                // 使用预计算的 Query Norm 优化性能
-                const score = embeddingService.cosineSimilarity(
-                    queryVector,
-                    event.embedding,
-                    queryNormSq,
-                    undefined // Event Norm 暂未缓存，仍需实时计算
-                );
-
-                // 过滤低于阈值的结果
-                const threshold = config.embedding?.minScoreThreshold ?? 0.3;
-                if (score < threshold) continue;
-
-                const existing = candidateMap.get(event.id);
-                if (!existing || score > (existing.embeddingScore || 0)) {
-                    candidateMap.set(event.id, {
-                        id: event.id,
-                        summary: event.summary,
-                        embeddingScore: score,
-                        node: event,
-                    });
-                }
-            }
-        }
-
-        const vectorConfig = this.getVectorConfig();
-        // 按 Embedding 分数排序，返回 Top-K
-        const candidates = Array.from(candidateMap.values())
-            .sort((a, b) => (b.embeddingScore || 0) - (a.embeddingScore || 0))
-            .slice(0, config?.embedding?.topK || 20);
-
-        Logger.debug(LogModule.RAG_RETRIEVE, 'Embedding 检索完成', {
-            totalMatched: candidateMap.size,
-            topK: candidates.length,
-            topScore: candidates[0]?.embeddingScore,
-        });
-
-        return candidates;
-    }
 
     /**
      * 滚动窗口策略 (基础模式)

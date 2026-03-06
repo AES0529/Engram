@@ -37,6 +37,108 @@ const TASK_TYPE_LABELS: Record<string, string> = {
     embed: '向量化',
 };
 
+// ==================== 数据批处理区域 ====================
+
+import { useMemoryStore } from '@/state/memoryStore';
+import { notificationService } from '@/ui/services/NotificationService';
+import { Archive, Loader2, Search as SearchIcon } from 'lucide-react';
+
+/** 数据批处理 - 独立于楼层的数据级操作 */
+const DataBatchSection: React.FC = () => {
+    const [archiveStats, setArchiveStats] = useState<{ total: number; pending: number } | null>(null);
+    const [isScanning, setIsScanning] = useState(false);
+    const [isArchiving, setIsArchiving] = useState(false);
+
+    // 扫描待归档事件
+    const handleScan = async () => {
+        setIsScanning(true);
+        try {
+            const store = useMemoryStore.getState();
+            const allEvents = await store.getAllEvents();
+            const total = allEvents.filter(e => e.level === 0).length;
+            const pending = allEvents.filter(e => e.is_embedded && !e.is_archived && e.level === 0).length;
+            setArchiveStats({ total, pending });
+        } finally {
+            setIsScanning(false);
+        }
+    };
+
+    // 执行归档
+    const handleArchive = async () => {
+        if (!archiveStats || archiveStats.pending === 0) return;
+        setIsArchiving(true);
+        try {
+            const store = useMemoryStore.getState();
+            const allEvents = await store.getAllEvents();
+            const toArchive = allEvents.filter(e => e.is_embedded && !e.is_archived && e.level === 0);
+            const ids = toArchive.map(e => e.id);
+            await store.archiveEvents(ids);
+            notificationService.success(`已归档 ${ids.length} 条事件`, 'Engram');
+            setArchiveStats(prev => prev ? { ...prev, pending: 0 } : null);
+        } catch (error) {
+            notificationService.error('归档失败', 'Engram');
+        } finally {
+            setIsArchiving(false);
+        }
+    };
+
+    return (
+        <section className="space-y-4 pt-4 border-t border-border/50">
+            <h3 className="text-primary text-sm font-medium">数据批处理</h3>
+            <p className="text-xs text-muted-foreground">
+                对事件数据进行批量操作（不依赖楼层范围）
+            </p>
+
+            {/* 归档操作卡片 */}
+            <div className="p-4 rounded-lg bg-card/30 border border-border/30 space-y-3">
+                <div className="flex items-center gap-2">
+                    <Archive size={14} className="text-primary" />
+                    <span className="text-sm font-medium text-foreground">归档已嵌入事件</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                    将已完成向量化但未归档的 level 0 事件标记为归档状态
+                </p>
+
+                {/* 扫描结果 */}
+                {archiveStats && (
+                    <div className="text-xs space-y-1 p-2 bg-muted/20 rounded">
+                        <div className="flex justify-between">
+                            <span className="text-muted-foreground">level 0 事件总数</span>
+                            <span className="font-mono text-foreground">{archiveStats.total}</span>
+                        </div>
+                        <div className="flex justify-between">
+                            <span className="text-muted-foreground">待归档（已嵌入 & 未归档）</span>
+                            <span className={`font-mono ${archiveStats.pending > 0 ? 'text-amber-400' : 'text-value'}`}>
+                                {archiveStats.pending}
+                            </span>
+                        </div>
+                    </div>
+                )}
+
+                {/* 操作按钮 */}
+                <div className="flex items-center gap-2">
+                    <button
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs border border-border rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/30 transition-colors disabled:opacity-40"
+                        onClick={handleScan}
+                        disabled={isScanning || isArchiving}
+                    >
+                        {isScanning ? <Loader2 size={12} className="animate-spin" /> : <SearchIcon size={12} />}
+                        扫描
+                    </button>
+                    <button
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors disabled:opacity-40"
+                        onClick={handleArchive}
+                        disabled={isArchiving || !archiveStats || archiveStats.pending === 0}
+                    >
+                        {isArchiving ? <Loader2 size={12} className="animate-spin" /> : <Archive size={12} />}
+                        {isArchiving ? '归档中...' : `归档${archiveStats?.pending ? ` (${archiveStats.pending})` : ''}`}
+                    </button>
+                </div>
+            </div>
+        </section>
+    );
+};
+
 export const BatchProcessingPanel: React.FC = () => {
     // 使用 Workflow Hook
     const {
@@ -105,7 +207,7 @@ export const BatchProcessingPanel: React.FC = () => {
             .filter(([_, enabled]) => enabled)
             .map(([type]) => type) as any[];
 
-        await batchProcessor.start(analysis.startFloor, analysis.endFloor, undefined, types);
+        await batchProcessor.startHistory(analysis.startFloor, analysis.endFloor, types);
         // useWorkflow 会自动更新状态
     }, [analysis, selectedTypes]);
 
@@ -131,18 +233,13 @@ export const BatchProcessingPanel: React.FC = () => {
         try {
             const result = await batchProcessor.importText(
                 importText,
-                { mode: importMode, chunkSize, overlapSize },
-                (q) => {
-                    // 更新本地导入进度，获得更平滑的反馈
-                    if (q.tasks[0]) {
-                        setImportProgress(q.tasks[0].progress);
-                    }
-                }
+                { mode: importMode, chunkSize, overlapSize }
             );
-            alert(`导入完成：${result.success} 成功，${result.failed} 失败`);
+            // 依赖 BatchProcessor 内部的消息通知或者 Error 冒泡
+            // V1.0 架构下引擎结束会自动清理 queue，进度条会自然消失
         } catch (e) {
             console.error('Import failed', e);
-            alert('导入失败');
+            notificationService.error('导入失败', 'Engram Batch');
         } finally {
             setImportProgress(null);
         }
@@ -352,7 +449,7 @@ export const BatchProcessingPanel: React.FC = () => {
 
                                 {/* 3. 详细子任务列表 (滚动视窗) */}
                                 <div className="space-y-1 max-h-40 overflow-y-auto">
-                                    {queue.tasks.slice(0, 10).map((task) => (
+                                    {(queue.tasks || []).slice(0, 10).map((task) => (
                                         <div key={task.id} className="flex items-center gap-2 text-xs">
                                             <TaskStatusIcon status={task.status} />
                                             <span className={task.status === 'running' ? 'text-foreground' : 'text-muted-foreground'}>
@@ -487,6 +584,9 @@ export const BatchProcessingPanel: React.FC = () => {
                     </div>
                 )}
             </section>
+
+            {/* ==================== 数据批处理 ==================== */}
+            <DataBatchSection />
         </div>
     );
 };

@@ -170,47 +170,51 @@ export const LLMPresetForm: React.FC<LLMPresetFormProps> = ({
                         placeholder="sk-..."
                     />
 
-                    {/* 模型选择: 下拉 + 手动输入 + 获取按钮 */}
+                    {/* 模型选择: 下拉 + 手动输入 + 获取按钮在标题旁 */}
                     <div className="flex flex-col gap-2">
-                        <div className="flex items-end gap-2">
-                            {modelList.length > 0 ? (
-                                <SelectField
-                                    className="flex-1 !mb-0"
-                                    label="模型名称"
-                                    value={preset.custom?.model || ''}
-                                    onChange={(value) => updateCustom('model', value)}
-                                    options={modelList.map(m => ({ value: m.id, label: m.name || m.id }))}
-                                    placeholder="选择模型"
-                                />
-                            ) : (
-                                <TextField
-                                    className="flex-1 !mb-0"
-                                    label="模型名称"
-                                    value={preset.custom?.model || ''}
-                                    onChange={(value) => updateCustom('model', value)}
-                                    placeholder="gpt-4o-mini"
-                                    required
-                                />
-                            )}
+                        {/* 标题行：模型名称 + 刷新图标 */}
+                        <div className="flex items-center gap-2">
+                            <label className="text-sm font-medium text-foreground">
+                                模型名称 <span className="text-destructive">*</span>
+                            </label>
                             <button
                                 type="button"
-                                className="h-[42px] w-[42px] min-w-[42px] flex items-center justify-center border-none rounded-md bg-muted text-muted-foreground cursor-pointer transition-all hover:bg-accent hover:text-foreground disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="p-0.5 border-none bg-transparent text-muted-foreground cursor-pointer transition-colors hover:text-primary disabled:opacity-40 disabled:cursor-not-allowed"
                                 onClick={fetchModelList}
                                 disabled={isLoadingModels || !preset.custom?.apiUrl}
                                 title="获取模型列表"
                             >
                                 {isLoadingModels ? (
-                                    <Loader2 size={16} className="animate-spin" />
+                                    <Loader2 size={14} className="animate-spin" />
                                 ) : (
-                                    <RefreshCw size={16} />
+                                    <RefreshCw size={14} />
                                 )}
                             </button>
+                            {modelList.length > 0 && (
+                                <span className="text-[10px] text-muted-foreground">({modelList.length} 个模型)</span>
+                            )}
                         </div>
+                        {/* 输入/选择 */}
+                        {modelList.length > 0 ? (
+                            <SelectField
+                                className="!mb-0"
+                                label=""
+                                value={preset.custom?.model || ''}
+                                onChange={(value) => updateCustom('model', value)}
+                                options={modelList.map(m => ({ value: m.id, label: m.name || m.id }))}
+                                placeholder="选择模型"
+                            />
+                        ) : (
+                            <TextField
+                                className="!mb-0"
+                                label=""
+                                value={preset.custom?.model || ''}
+                                onChange={(value) => updateCustom('model', value)}
+                                placeholder="gpt-4o-mini"
+                            />
+                        )}
                         {modelError && (
                             <p className="text-xs text-destructive">{modelError}</p>
-                        )}
-                        {modelList.length > 0 && (
-                            <p className="text-xs text-muted-foreground">已加载 {modelList.length} 个模型</p>
                         )}
                     </div>
                 </FormSection>

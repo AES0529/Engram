@@ -7,7 +7,7 @@ import { PROMPT_CATEGORIES } from '@/config/types/prompt';
 import { FormSection, SelectField, TextField } from '@/ui/components/form/FormComponents';
 import { WorldbookBindingField } from '@/ui/components/form/WorldbookBindingField';
 import { Check, Copy } from 'lucide-react';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 
 interface PromptTemplateFormProps {
     template: PromptTemplate;
@@ -81,6 +81,25 @@ export const PromptTemplateForm: React.FC<PromptTemplateFormProps> = ({
         ...llmPresets.map(p => ({ value: p.id, label: p.name })),
     ];
 
+    // Token 计数
+    const [sysTokens, setSysTokens] = useState(0);
+    const [userTokens, setUserTokens] = useState(0);
+
+    useEffect(() => {
+        const timer = setTimeout(async () => {
+            try {
+                const { WorldInfoService } = await import('@/integrations/tavern/worldbook');
+                const t1 = template.systemPrompt ? await WorldInfoService.countTokens(template.systemPrompt) : 0;
+                setSysTokens(t1);
+                const t2 = template.userPromptTemplate ? await WorldInfoService.countTokens(template.userPromptTemplate) : 0;
+                setUserTokens(t2);
+            } catch (e) {
+                // ignore
+            }
+        }, 300); // 300ms 防抖
+        return () => clearTimeout(timer);
+    }, [template.systemPrompt, template.userPromptTemplate]);
+
     // 更新模板字段
     const updateTemplate = (updates: Partial<PromptTemplate>) => {
         onChange({ ...template, ...updates, updatedAt: Date.now() });
@@ -146,6 +165,11 @@ export const PromptTemplateForm: React.FC<PromptTemplateFormProps> = ({
                     placeholder="输入系统提示词..."
                     multiline
                     rows={4}
+                    description={
+                        <span className="flex items-center gap-1 text-muted-foreground mt-1">
+                            约 <strong className="text-value font-mono font-medium">{sysTokens}</strong> Tokens
+                        </span>
+                    }
                 />
             </FormSection>
 
@@ -165,6 +189,11 @@ export const PromptTemplateForm: React.FC<PromptTemplateFormProps> = ({
                     placeholder="输入用户提示词模板..."
                     multiline
                     rows={6}
+                    description={
+                        <span className="flex items-center gap-1 text-muted-foreground mt-1">
+                            约 <strong className="text-value font-mono font-medium">{userTokens}</strong> Tokens
+                        </span>
+                    }
                 />
             </FormSection>
 

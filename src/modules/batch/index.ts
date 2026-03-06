@@ -2,14 +2,9 @@
  * Batch Services 导出
  */
 
-export {  batchProcessor } from './BatchProcessor';
+export { batchProcessor } from './BatchProcessor';
+export type { ImportConfig } from './tasks/ImportTextTask';
 export type {
-    
-    
-    BatchTaskStatus,
-    BatchQueue,
-    HistoryAnalysis,
-    ImportMode,
-    
-    
-} from './BatchProcessor';
+    BatchProgressCallback, BatchQueue, BatchTask, BatchTaskStatus, BatchTaskType, HistoryAnalysis, IBatchTaskHandler, ImportMode
+} from './types';
+

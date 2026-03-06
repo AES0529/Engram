@@ -52,7 +52,8 @@ graph TD
 | **EmbeddingService** | `src/modules/rag/embedding/EmbeddingService.ts` | 处理文本向量化，支持多并发和批处理 |
 | **RerankService** | `src/modules/rag/retrieval/Reranker.ts` | 对初步召回结果进行精细化语义重排序 |
 | **BrainRecallCache** | `src/modules/rag/retrieval/BrainRecallCache.ts` | **V0.9.5 核心**：类脑记忆缓存系统 |
-| **Retriever** | `src/modules/rag/retrieval/Retriever.ts` | 统一检索服务，编排上述所有组件 |
+| **RetrievalWorkflow** | `src/modules/workflow/definitions/RetrievalWorkflow.ts` | **(V1.4.1 新增)** RAG 流水线的底层状态机流转编排定义 |
+| **Retriever** | `src/modules/rag/retrieval/Retriever.ts` | 统一检索入口，已重构为封装并调度 `WorkflowEngine` 的外壳级门面服务 |
 
 ### 蓝灯/绿灯可见性机制 🚦
 
@@ -281,7 +282,8 @@ HybridScore = (1 - α) * EmbeddingScore + α * RerankScore
 
 | 版本 | 变更 |
 |------|------|
-| **V1.4** | 类脑召回算法重构：填满优先、基于容量淘汰、移除 MMR，与 `enforceShortTermLimit` 合并移除 `evict` |
+| **V1.4.1**| **引擎翻新**：废除硬编码的检索总线，引入 `WorkflowEngine` 底层重构驱动检索生命周期；拆分出并跑通数据联通测试。 |
+| V1.4 | 类脑召回算法重构：填满优先、基于容量淘汰、移除 MMR，与 `enforceShortTermLimit` 合并移除 `evict` |
 | V1.2 | 双轨存储机制、门控强化、Sigmoid 激活 |
 | V0.9.5 | 新增 BrainRecallCache，替代 StickyCache |
 | V0.8.5 | 引入混合检索架构 (Embed + Rerank) |

@@ -1,11 +1,11 @@
 import { WorkflowDefinition } from '../core/WorkflowEngine';
 import {
     BuildPrompt,
-    LlmRequest,
     CleanRegex,
     ExtractTags,
-    UserReview,
-    FetchContext
+    FetchContext,
+    LlmRequest,
+    UserReview
 } from '../steps';
 
 export const createPreprocessWorkflow = (): WorkflowDefinition => ({
@@ -17,8 +17,8 @@ export const createPreprocessWorkflow = (): WorkflowDefinition => ({
         new LlmRequest(),
         // 1. Remove <think> blocks
         new CleanRegex('output'),
-        // 2. Extract <output> and <query>
-        new ExtractTags(['output', 'query']),
+        // 2. Extract <output>, <query>, and <recall_decision> (Agentic RAG)
+        new ExtractTags(['output', 'query', 'recall_decision']),
         // 3. User Review (Preview/Revision)
         new UserReview({
             title: '预处理结果预览',

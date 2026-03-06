@@ -62,9 +62,23 @@ export class UserReview implements IStep {
                 // 暂时简单判断: TODO: Config or Schema check
                 reviewType = 'entity'; // 默认假设，或者根据 context.workflowName 判断
                 reviewData = context.parsedData;
-            } else if (context.extractedTags?.query) {
-                // V1.3: 预处理模式 - 传递 query 供编辑
-                reviewData = { query: context.extractedTags.query };
+            } else if (context.extractedTags?.query || context.extractedTags?.recall_decision) {
+                // V1.3/V1.4: 预处理模式 - 传递 query 与 agentic 决策供编辑
+                reviewData = {} as Record<string, any>;
+                if (context.extractedTags.query) {
+                    reviewData.query = context.extractedTags.query;
+                }
+                if (context.extractedTags.recall_decision) {
+                    try {
+                        const { RobustJsonParser } = await import('@/core/utils/JsonParser');
+                        const parsed = RobustJsonParser.parse(context.extractedTags.recall_decision);
+                        if (parsed?.recalls && Array.isArray(parsed.recalls)) {
+                            reviewData.agenticRecalls = parsed.recalls;
+                        }
+                    } catch (e) {
+                        Logger.warn('UserReview', '解析 recall_decision 供审阅失败', e);
+                    }
+                }
             }
 
             // V1.2.0: 使用新的 ReviewService
@@ -119,10 +133,16 @@ export class UserReview implements IStep {
 
             // 如果 Review 返回了新的 structured data (例如实体编辑结果)，更新 context
             if (result.data) {
-                // V1.3: 处理编辑后的 query
-                if (result.data.query !== undefined && context.extractedTags) {
-                    context.extractedTags.query = result.data.query;
-                    Logger.debug('UserReview', 'Query 已更新', { query: result.data.query });
+                // V1.3: 处理编辑后的 query 与 agentic 决策
+                if (context.extractedTags) {
+                    if (result.data.query !== undefined) {
+                        context.extractedTags.query = result.data.query;
+                        Logger.debug('UserReview', 'Query 已更新', { query: result.data.query });
+                    }
+                    if (result.data.agenticRecalls !== undefined) {
+                        context.extractedTags.recall_decision = JSON.stringify({ recalls: result.data.agenticRecalls });
+                        Logger.debug('UserReview', 'Agentic 召回决策已更新', { count: result.data.agenticRecalls.length });
+                    }
                 }
 
                 // 如果是实体数据，更新 parsedData 和 output

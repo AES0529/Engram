@@ -15,6 +15,7 @@ export interface RecallResultItem {
     isTopK: boolean;              // 是否进入 TopK
     isReranked: boolean;          // 是否通过 Rerank
     sourceFloor?: number;         // 来源楼层
+    reason?: string;              // Agentic 召回理由
 }
 
 /**
@@ -48,7 +49,7 @@ export interface RecallLogEntry {
     timestamp: number;
     query: string;                        // 检索查询
     preprocessedQuery?: string;           // 预处理后的查询
-    mode: 'embedding' | 'hybrid';         // (Disabled in V0.8.5)
+    mode: 'embedding' | 'hybrid' | 'agentic';         // (Disabled in V0.8.5)
     results: RecallResultItem[];          // 召回结果
     stats: RecallStats;                   // 统计信息
     brainStats?: BrainRecallStats;        // 类脑召回详情

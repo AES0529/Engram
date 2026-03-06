@@ -30,31 +30,55 @@ export function useWorkflow(): UseWorkflowReturn {
 
     // 订阅 BatchProcessor 状态
     useEffect(() => {
-        const updateState = () => {
-            const s = batchProcessor.getStatus();
-            setStatus(s.status);
-            setQueue(s.queue);
-            setProgress(s.progress);
-            setCurrentTask(s.currentTask || null);
-            setError(s.error || null);
+        const updateState = (q?: BatchQueue) => {
+            const currentQueue = q || batchProcessor.queue;
+            setQueue(currentQueue);
+
+            // 计算综合状态与进度
+            const isRunning = currentQueue.isRunning;
+            const isPaused = currentQueue.isPaused;
+            const tCnt = currentQueue.tasks.length;
+
+            if (tCnt === 0) {
+                setStatus('idle');
+                setProgress(0);
+                setCurrentTask(null);
+                setError(null);
+                return;
+            }
+
+            if (isPaused) setStatus('pending');
+            else if (isRunning) setStatus('running');
+            else if (currentQueue.tasks.some(t => t.status === 'error')) setStatus('error');
+            else setStatus('done');
+
+            const total = currentQueue.overallProgress.total || 1;
+            setProgress(Math.round((currentQueue.overallProgress.current / total) * 100));
+
+            const activeTask = currentQueue.tasks[currentQueue.currentTaskIndex];
+            setCurrentTask(activeTask?.name || activeTask?.type || null);
+            setError(activeTask?.error || null);
         };
 
-        // 初始更新并注册观察者
+        // 初始拉取
         updateState();
 
-        // V0.9.20 订阅取代 500ms 发热轮询
-        const unsubscribe = batchProcessor.subscribe(() => {
-            updateState();
+        // 注册节流订阅
+        const unsubscribe = batchProcessor.subscribe((q) => {
+            updateState(q);
         });
 
         return () => unsubscribe();
     }, []);
 
-    const start = useCallback(() => batchProcessor.start(), []);
+    const start = useCallback(() => {
+        // V1.0 架构下不再由统一的 start() 入口承接所有任务，而是通过 BatchProcessor 暴露的业务接口。
+        // UI 的 start 按钮目前在设计上由业务面板自己调用（如 startHistory）
+        console.warn('Generic start() is deprecated. Please use BatchProcessor.startHistory() or importText().');
+    }, []);
     const pause = useCallback(() => batchProcessor.pause(), []);
     const resume = useCallback(() => batchProcessor.resume(), []);
     const stop = useCallback(() => batchProcessor.stop(), []);
-    const clear = useCallback(() => batchProcessor.clear(), []);
 
     return {
         status,
@@ -66,6 +90,6 @@ export function useWorkflow(): UseWorkflowReturn {
         pause,
         resume,
         stop,
-        clear
+        clear: stop // Map clear to stop for safety
     };
 }
