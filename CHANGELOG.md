@@ -17,6 +17,22 @@
 - **向量化范围指定 (Vectorization Range Selection)**:
   - 在「数据处理 - 向量化」面板的新增了可选的起始与结束消息序号区间配置。
   - 底层 `EmbeddingService` 支持区间拦截，允许用户精细控制 Text Embedding 的事件边界，避免在大长篇对话中进行无差别的算力消耗。
+- **系统摘要审查优化 (Summary Review Refactoring)**:
+  - 重构了 `SummaryReview` 面板，增加了底层防呆解析逻辑。现在能够自动解析并提取 LLM 生成的原始 JSON 格式字符串，避免了过去将 JSON 源码逐行切分展示的问题。
+  - 优化了事件卡片的 UI 表现，使得事件审核界面更加一致和清晰。
+- **核心摘要提示词优化 (Prompt Optimization)**:
+  - 增强了 `summary.yaml` 与 `trim.yaml` 的核心指令，引入了参照剧情编排的“反八股”原则。
+  - 明确禁止在抽取人物关系时过度解读为“支配、控制、猎物”等权力化关系，保持情感互动描写的平等性。
+  - 严格限制 `causality` 字段的输出，确保该字段只填入真实的逻辑因果链（如“引发了XX”、“关键伏笔”），避免混入无意义的闲聊或情绪标签。
+  - 在 `summary.yaml` 的 `<example_demonstration>` 块中加入了一个反八股判定的清晰实例，以及一个示范“平实语言描述客观行动”的浪漫互动段落（希恩与伊莉雅的深渊交互）。
+
+### 🐛 缺陷修复 (Bug Fixes)
+
+- **设置面板删库功能修复 (Database Deletion Fix)**:
+  - 修复了在全局设置界面点击“删除数据库 (删库)”按钮时静默失败的问题。先前由于 `memoryStore` 未在当前视图挂载聊天 ID，导致删除操作直接 `return` 而未抛出错误。现已补全 ID 兜底获取逻辑（回落到底层 `getCurrentChatId()`），确保能彻底清除 IndexedDB 持久化文件。
+- **自定义 API 配置面板布局修复 (API Presets Layout Fix)**:
+  - 修复了因为过长的解释文本导致“流式传输 (Streaming)”等具有大量说明的开关按钮（SwitchField）被挤出可见区域的 UI 排版错误。由于父级 `MasterDetailLayout` 缺少 `min-w-0` 限制，过长的子级文本会撑破 `flex-1` 容器，现已修正 flex 收缩逻辑。
+
 
 
 ## [1.4.1] - 2026-03-06

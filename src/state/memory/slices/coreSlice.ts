@@ -92,8 +92,15 @@ export const createCoreSlice: StateCreator<any, [], [], CoreState> = (set, get) 
     }),
 
     clearChatDatabase: async () => {
-        const db = getCurrentDb();
-        if (!db) return;
+        let db = getCurrentDb();
+        if (!db) {
+            // Try to initialize it if missing
+            db = await get().initChat();
+            if (!db) {
+                console.warn('[MemoryStore] No database available to clear');
+                return;
+            }
+        }
 
         try {
             await db.transaction('rw', db.events, db.entities, db.meta, async () => {
@@ -113,8 +120,10 @@ export const createCoreSlice: StateCreator<any, [], [], CoreState> = (set, get) 
     },
 
     deleteChatDatabase: async () => {
-        const chatId = get().currentChatId;
-        if (!chatId) return;
+        const chatId = get().currentChatId || getCurrentChatId();
+        if (!chatId) {
+            throw new Error('未连接到聊天，无法删除');
+        }
 
         try {
             await deleteDatabase(chatId);

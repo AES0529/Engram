@@ -10,24 +10,51 @@ interface SummaryReviewProps {
 export const SummaryReview: React.FC<SummaryReviewProps> = ({ content, data, onChange }) => {
     // Parse input data to list of events
     const parseEvents = (): string[] => {
+        // 1. Try from parsed data object
         if (Array.isArray(data)) return data;
-        if (data && typeof data === 'object' && Array.isArray(data.events)) return data.events;
-        // Fallback: split content by newlines if it looks like a list
-        if (content) return content.split('\n').filter(l => l.trim().length > 0);
+        if (data && typeof data === 'object' && Array.isArray(data.events)) {
+            return data.events;
+        }
+
+        // 2. Try to parse content as JSON if data is missing or malformed
+        if (content) {
+            try {
+                // Remove markdown code blocks if any
+                const cleanContent = content.replace(/```(json)?/g, '').trim();
+                const parsed = JSON.parse(cleanContent);
+                if (Array.isArray(parsed)) return parsed;
+                if (parsed && typeof parsed === 'object' && Array.isArray(parsed.events)) {
+                    return parsed.events;
+                }
+            } catch (e) {
+                // Ignore parse errors, fallback to text splitting
+            }
+
+            // 3. Last fallback: split content by newlines assuming it's a plain list
+            return content.split('\n')
+                .map(l => l.trim())
+                .filter(l => l.length > 0 && !l.startsWith('{') && !l.startsWith('}') && !l.startsWith('[') && !l.startsWith(']'));
+        }
         return [];
     };
 
-    const [events, setEvents] = useState<string[]>(parseEvents());
-
-    useEffect(() => {
-        setEvents(parseEvents());
-    }, [data, content]);
+    const [events, setEvents] = useState<string[]>([]);
 
     // Notify parent of changes
     const notifyChange = (newEvents: string[]) => {
         const newContent = newEvents.join('\n');
         onChange(newContent, { events: newEvents });
     };
+
+    useEffect(() => {
+        const parsed = parseEvents();
+        setEvents(parsed);
+        // Only trigger sync up on initial load if `data.events` is missing
+        const parentHasEvents = data && !Array.isArray(data) && typeof data === 'object' && Array.isArray((data as any).events);
+        if (!parentHasEvents && parsed.length > 0) {
+            onChange(parsed.join('\n'), { events: parsed });
+        }
+    }, [data, content]);
 
     const handleChangeEvent = (index: number, val: string) => {
         const next = [...events];
@@ -54,25 +81,28 @@ export const SummaryReview: React.FC<SummaryReviewProps> = ({ content, data, onC
                 请确认生成的摘要事件列表。您可以修改表述或删除不重要的事件。
             </div>
 
-            <div className="flex-1 overflow-y-auto space-y-2 pr-2">
+            <div className="flex-1 overflow-y-auto space-y-3 pr-2 custom-scrollbar">
                 {events.map((evt, idx) => (
-                    <div key={idx} className="flex items-start gap-2 group">
-                        <div className="mt-2.5 w-1.5 h-1.5 rounded-full bg-primary/40 shrink-0" />
-                        <div className="flex-1 relative">
-                            <textarea
-                                value={evt}
-                                onChange={(e) => handleChangeEvent(idx, e.target.value)}
-                                className="w-full min-h-[40px] p-2 bg-muted/30 border border-transparent hover:border-border focus:border-primary rounded-md text-sm resize-none focus:outline-none transition-colors"
-                                rows={Math.max(1, Math.ceil(evt.length / 50))}
-                            />
+                    <div key={idx} className="relative group bg-card border border-border/50 rounded-lg p-3 shadow-sm hover:border-primary/40 transition-colors">
+                        <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                                <div className="w-1.5 h-1.5 rounded-full bg-primary/60 shrink-0" />
+                                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Event {idx + 1}</span>
+                            </div>
                             <button
                                 onClick={() => handleRemoveEvent(idx)}
-                                className="absolute right-2 top-2 p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
-                                title="移除此事件"
+                                className="p-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity bg-background/50 rounded"
+                                title="移除此片段"
                             >
                                 <X size={14} />
                             </button>
                         </div>
+                        <textarea
+                            value={evt}
+                            onChange={(e) => handleChangeEvent(idx, e.target.value)}
+                            className="w-full min-h-[60px] p-2 bg-muted/20 border border-transparent hover:border-border focus:border-primary focus:bg-background rounded-md text-sm resize-none focus:outline-none transition-colors"
+                            rows={Math.max(2, Math.ceil(evt.length / 40))}
+                        />
                     </div>
                 ))}
 
@@ -90,6 +120,6 @@ export const SummaryReview: React.FC<SummaryReviewProps> = ({ content, data, onC
                     添加事件
                 </button>
             </div>
-        </div>
+        </div >
     );
 };

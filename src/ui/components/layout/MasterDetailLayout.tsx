@@ -107,7 +107,7 @@ export const MasterDetailLayout: React.FC<MasterDetailLayoutProps> = ({
                                 animate={{ opacity: 1, x: 0 }}
                                 exit={{ opacity: 0, x: 20, position: 'absolute', right: 0 }}
                                 transition={{ type: "spring", bounce: 0, duration: 0.4 }}
-                                className="flex-1 flex flex-col min-h-0"
+                                className="flex-1 flex flex-col min-h-0 min-w-0"
                             >
                                 {detail}
                             </motion.div>
