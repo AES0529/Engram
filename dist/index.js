@@ -20273,25 +20273,29 @@ class Qb {
       throw new Error("SaveEvent: 无有效事件");
     const l = [], u = t.input.range || [0, 0];
     for (const h of c) {
-      const m = h.meta || {}, p = [];
-      m.causality && p.push(m.causality), m.logic && m.logic.length > 0 && p.push(m.logic.join(", "));
-      const x = p.length > 0 ? `(${p.join(" | ")})` : "", v = m.event || "", b = v ? `${v}${x}:
+      const m = h.structured_kv || h.meta || {}, p = [];
+      if (m.causality && p.push(m.causality), m.logic && m.logic.length > 0) {
+        const L = Array.isArray(m.logic) ? m.logic.join(", ") : m.logic;
+        p.push(L);
+      }
+      const x = p.length > 0 ? ` (${p.join(" | ")})` : "", v = m.event || "", b = v ? `${v}${x}:
 ` : "", k = [];
       if (m.time_anchor && k.push(m.time_anchor), m.location) {
-        const O = Array.isArray(m.location) ? m.location.join(", ") : m.location;
-        O && k.push(O);
+        const L = Array.isArray(m.location) ? m.location.join(", ") : m.location;
+        L && k.push(L);
       }
-      m.role && m.role.length > 0 && k.push(m.role.join(", "));
-      const T = k.length > 0 ? `(${k.join(" | ")}) ` : "";
-      let E = h.summary || `[Summary Missing] ${m.event || "无摘要"}`;
-      const N = `${b}${T}${E}`, R = await r.saveEvent({
-        summary: N,
+      const T = m.role || m.characters || [], E = Array.isArray(T) ? T : [T];
+      E.length > 0 && k.push(E.join(", "));
+      const N = k.length > 0 ? `(${k.join(" | ")}) ` : "";
+      let R = h.summary || `[Summary Missing] ${m.event || "无摘要"}`;
+      const O = `${b}${N}${R}`, I = await r.saveEvent({
+        summary: O,
         structured_kv: {
           time_anchor: m.time_anchor || "",
-          role: m.role || [],
+          role: E,
           location: Array.isArray(m.location) ? m.location : m.location ? [m.location] : [],
           event: m.event || "",
-          logic: m.logic || [],
+          logic: Array.isArray(m.logic) ? m.logic : m.logic ? [m.logic] : [],
           causality: m.causality || ""
         },
         significance_score: h.significance_score || 0.5,
@@ -20303,7 +20307,7 @@ class Qb {
           end_index: u[1]
         }
       });
-      l.push(R);
+      l.push(I);
     }
     if (t.output = l, u[1] > 0 && await r.setLastSummarizedFloor(u[1]), await Xr.refreshEngramCache(), t.config.autoHide && u[1] > 0) {
       const h = u[0] - 1, m = u[1] - 1;

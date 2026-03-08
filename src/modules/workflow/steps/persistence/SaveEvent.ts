@@ -1,7 +1,6 @@
 import { Logger } from '@/core/logger';
 import { EventNode } from '@/data/types/graph';
-import { hideMessageRange } from '@/integrations/tavern';
-import { MacroService } from '@/integrations/tavern';
+import { hideMessageRange, MacroService } from '@/integrations/tavern';
 import { useMemoryStore } from '@/state/memoryStore';
 import { notificationService } from '@/ui/services/NotificationService';
 import { JobContext } from '../../core/JobContext';
@@ -50,7 +49,8 @@ export class SaveEvent implements IStep {
 
         // 3. 保存逻辑 (Burn & Save)
         for (const evt of eventsToSave) {
-            const meta = evt.meta || {};
+            // V1.6 FIX: Prioritize structured_kv (from UI) over meta
+            const kv = evt.structured_kv || evt.meta || {};
 
             // Burn logic (Construct Summary String) V1.6: New compact format
             // Format: 标题(因果链 | 逻辑标签):
@@ -58,36 +58,41 @@ export class SaveEvent implements IStep {
 
             // Build title suffix with causality and logic
             const titleSuffixParts: string[] = [];
-            if (meta.causality) titleSuffixParts.push(meta.causality);
-            if (meta.logic && meta.logic.length > 0) titleSuffixParts.push(meta.logic.join(', '));
-            const titleSuffix = titleSuffixParts.length > 0 ? `(${titleSuffixParts.join(' | ')})` : '';
+            if (kv.causality) titleSuffixParts.push(kv.causality);
+            if (kv.logic && kv.logic.length > 0) {
+                const logicStr = Array.isArray(kv.logic) ? kv.logic.join(', ') : kv.logic;
+                titleSuffixParts.push(logicStr);
+            }
+            const titleSuffix = titleSuffixParts.length > 0 ? ` (${titleSuffixParts.join(' | ')})` : '';
 
             // Build title line
-            const eventTitle = meta.event || '';
+            const eventTitle = kv.event || '';
             const titleLine = eventTitle ? `${eventTitle}${titleSuffix}:\n` : '';
 
             // Build meta line (time | location | characters)
             const metaParts: string[] = [];
-            if (meta.time_anchor) metaParts.push(meta.time_anchor);
-            if (meta.location) {
-                const loc = Array.isArray(meta.location) ? meta.location.join(', ') : meta.location;
+            if (kv.time_anchor) metaParts.push(kv.time_anchor);
+            if (kv.location) {
+                const loc = Array.isArray(kv.location) ? kv.location.join(', ') : kv.location;
                 if (loc) metaParts.push(loc);
             }
-            if (meta.role && meta.role.length > 0) metaParts.push(meta.role.join(', '));
+            const roles = kv.role || kv.characters || []; // Support both names
+            const rolesArray = Array.isArray(roles) ? roles : [roles];
+            if (rolesArray.length > 0) metaParts.push(rolesArray.join(', '));
             const metaLine = metaParts.length > 0 ? `(${metaParts.join(' | ')}) ` : '';
 
-            let rawSummary = evt.summary || `[Summary Missing] ${meta.event || '无摘要'}`;
+            let rawSummary = evt.summary || `[Summary Missing] ${kv.event || '无摘要'}`;
             const burnedSummary = `${titleLine}${metaLine}${rawSummary}`;
 
             const saved = await store.saveEvent({
                 summary: burnedSummary,
                 structured_kv: {
-                    time_anchor: meta.time_anchor || '',
-                    role: meta.role || [],
-                    location: Array.isArray(meta.location) ? meta.location : (meta.location ? [meta.location] : []),
-                    event: meta.event || '',
-                    logic: meta.logic || [],
-                    causality: meta.causality || ''
+                    time_anchor: kv.time_anchor || '',
+                    role: rolesArray,
+                    location: Array.isArray(kv.location) ? kv.location : (kv.location ? [kv.location] : []),
+                    event: kv.event || '',
+                    logic: Array.isArray(kv.logic) ? kv.logic : (kv.logic ? [kv.logic] : []),
+                    causality: kv.causality || ''
                 },
                 significance_score: evt.significance_score || 0.5,
                 level: 0,
