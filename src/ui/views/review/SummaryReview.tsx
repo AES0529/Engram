@@ -56,6 +56,37 @@ export const SummaryReview: React.FC<SummaryReviewProps> = ({ content, data, onC
         }
     }, [data, content]);
 
+    const handleUpdateKV = (index: number, key: string, val: string) => {
+        const next = [...events];
+        if (typeof next[index] !== 'object' || next[index] === null) {
+            // If it was a string, convert to object first
+            next[index] = { summary: next[index], structured_kv: {} };
+        }
+
+        const evt = next[index];
+        const kv = evt.structured_kv || evt.meta || {};
+
+        let finalVal: any = val;
+        // Handle array fields
+        if (key === 'location' || key === 'role') {
+            finalVal = val.split(/[,，]/).map(s => s.trim()).filter(Boolean);
+        }
+
+        const newKV = { ...kv, [key]: finalVal };
+
+        // Maintain the same key name (structured_kv or meta)
+        if (evt.structured_kv) {
+            next[index] = { ...evt, structured_kv: newKV };
+        } else if (evt.meta) {
+            next[index] = { ...evt, meta: newKV };
+        } else {
+            next[index] = { ...evt, structured_kv: newKV };
+        }
+
+        setEvents(next);
+        notifyChange(next);
+    };
+
     const handleChangeEvent = (index: number, val: string) => {
         const next = [...events];
         if (typeof next[index] === 'object' && next[index] !== null) {
@@ -81,26 +112,38 @@ export const SummaryReview: React.FC<SummaryReviewProps> = ({ content, data, onC
         notifyChange(next);
     };
 
-    // Render KV display
-    const renderKV = (evt: any) => {
+    // Render KV display (Editable Tags)
+    const renderKV = (evt: any, idx: number) => {
         if (typeof evt !== 'object' || !evt) return null;
         const kv = evt.structured_kv || evt.meta || {};
-        const hasData = kv.time_anchor || kv.location || (kv.role && kv.role.length > 0);
-        if (!hasData) return null;
 
-        const locStr = Array.isArray(kv.location) ? kv.location.join(', ') : String(kv.location || '');
+        const fields = [
+            { key: 'time_anchor', label: '时间', color: 'text-value border-value/20 bg-value/5' },
+            { key: 'location', label: '地点', color: 'text-value border-value/20 bg-value/5' },
+            { key: 'role', label: '人物', color: 'text-emphasis border-emphasis/20 bg-emphasis/5' },
+            { key: 'logic', label: '逻辑', color: 'text-primary border-primary/20 bg-primary/5' },
+            { key: 'causality', label: '因果', color: 'text-orange-400 border-orange-400/20 bg-orange-400/5' },
+        ];
 
         return (
-            <div className="flex flex-wrap items-center gap-1.5 text-[10px] mb-2 px-1">
-                {kv.time_anchor && (
-                    <span className="text-value bg-value/5 px-1 py-0.5 rounded border border-value/20">({kv.time_anchor})</span>
-                )}
-                {locStr && (
-                    <span className="text-value bg-value/5 px-1 py-0.5 rounded border border-value/20">@{locStr}</span>
-                )}
-                {kv.role && kv.role.length > 0 && (
-                    <span className="text-emphasis bg-emphasis/5 px-1 py-0.5 rounded border border-emphasis/20">[{kv.role.join(', ')}]</span>
-                )}
+            <div className="flex flex-wrap items-center gap-2 mb-3 px-1">
+                {fields.map(f => {
+                    const rawVal = kv[f.key];
+                    const val = Array.isArray(rawVal) ? rawVal.join(', ') : (rawVal || '');
+
+                    return (
+                        <div key={f.key} className={`flex items-center gap-1 px-1.5 py-0.5 rounded border ${f.color} transition-all focus-within:ring-1 focus-within:ring-offset-0 focus-within:ring-current`}>
+                            <span className="text-[9px] font-bold uppercase opacity-60 pointer-events-none select-none">{f.label}:</span>
+                            <input
+                                value={val}
+                                onChange={(e) => handleUpdateKV(idx, f.key, e.target.value)}
+                                className="bg-transparent border-none outline-none text-[10px] w-[60px] focus:w-[120px] transition-all placeholder:italic placeholder:opacity-30"
+                                placeholder="..."
+                                spellCheck={false}
+                            />
+                        </div>
+                    );
+                })}
             </div>
         );
     };
@@ -108,20 +151,25 @@ export const SummaryReview: React.FC<SummaryReviewProps> = ({ content, data, onC
     return (
         <div className="flex flex-col gap-4">
             <div className="text-sm text-muted-foreground bg-muted/20 p-3 rounded-md border border-border/50">
-                请确认生成的摘要事件列表。您可以修改表述或删除不重要的事件。
+                请确认生成的摘要事件列表。您可以直接在标签内修改结构化数据，或在下方修改描述。
             </div>
 
-            <div className="space-y-3 pr-2">
+            <div className="space-y-4 pr-2 pb-4">
                 {events.map((evt, idx) => {
                     const isObject = typeof evt === 'object' && evt !== null;
                     const displayTitle = isObject ? (evt.structured_kv?.event || evt.meta?.event || `Event ${idx + 1}`) : `Event ${idx + 1}`;
 
                     return (
                         <div key={idx} className="relative group bg-card border border-border/50 rounded-lg p-3 shadow-sm hover:border-primary/40 transition-colors">
-                            <div className="flex items-center justify-between mb-2">
+                            <div className="flex items-center justify-between mb-3">
                                 <div className="flex items-center gap-1.5 flex-1 min-w-0">
                                     <div className="w-1.5 h-1.5 rounded-full bg-primary/60 shrink-0" />
-                                    <span className="text-xs font-medium text-heading truncate uppercase tracking-wider">{displayTitle}</span>
+                                    <input
+                                        value={displayTitle}
+                                        onChange={(e) => handleUpdateKV(idx, 'event', e.target.value)}
+                                        className="text-xs font-medium text-heading truncate uppercase tracking-wider bg-transparent border-none outline-none focus:text-primary max-w-[200px]"
+                                        placeholder="事件名称"
+                                    />
                                 </div>
                                 <button
                                     onClick={() => handleRemoveEvent(idx)}
@@ -132,13 +180,14 @@ export const SummaryReview: React.FC<SummaryReviewProps> = ({ content, data, onC
                                 </button>
                             </div>
 
-                            {renderKV(evt)}
+                            {renderKV(evt, idx)}
 
                             <textarea
                                 value={isObject ? (evt.summary || '') : evt}
                                 onChange={(e) => handleChangeEvent(idx, e.target.value)}
-                                className="w-full min-h-[60px] p-2 bg-muted/20 border border-transparent hover:border-border focus:border-primary focus:bg-background rounded-md text-sm resize-none focus:outline-none transition-colors custom-scrollbar"
+                                className="w-full min-h-[60px] p-2 bg-muted/20 border border-transparent hover:border-border focus:border-primary focus:bg-background rounded-md text-sm resize-none focus:outline-none transition-colors"
                                 rows={Math.max(2, Math.ceil((isObject ? (evt.summary || '').length : evt.length) / 40))}
+                                placeholder="摘要详情..."
                             />
                         </div>
                     );
