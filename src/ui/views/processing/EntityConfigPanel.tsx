@@ -8,6 +8,7 @@
  * V1.4.2: 增加自动归档与手动清理功能
  */
 import type { EntityExtractConfig } from '@/config/types/memory';
+import { EventBus } from '@/core/events';
 import { entityBuilder } from "@/modules/memory/EntityExtractor";
 import { SliderField } from '@/ui/components/core/SliderField';
 import { SwitchField } from '@/ui/components/form/FormComponents';
@@ -46,6 +47,14 @@ export const EntityConfigPanel: React.FC<EntityConfigPanelProps> = ({ config, on
 
     useEffect(() => {
         loadStatus();
+    }, []);
+
+    // V1.4.3: Decoupled State Sync via EventBus
+    useEffect(() => {
+        const { unsubscribe } = EventBus.on('ENTITY_ARCHIVED', () => {
+            loadStatus();
+        });
+        return unsubscribe;
     }, []);
 
     // 切换启用状态
@@ -96,7 +105,7 @@ export const EntityConfigPanel: React.FC<EntityConfigPanelProps> = ({ config, on
         setIsLoading(true);
         try {
             await entityBuilder.checkAndArchiveEntities();
-            await loadStatus();
+            // loadStatus() 已经由 EventBus 监听器处理，不再需要手动调用
         } catch (e) {
             console.error('[EntityConfigPanel] Manual archiving failed:', e);
         } finally {

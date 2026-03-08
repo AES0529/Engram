@@ -375,7 +375,9 @@ export class EntityBuilder {
             Logger.success(LogModule.MEMORY_ENTITY, '实体保存完成');
 
             // V1.4.2: 成功保存后触发自动归档检查
-            if (this.config.autoArchive) {
+            // 🐛 P0 Bugfix: 在进入归档前 yield 一下，确保 IndexedDB 视图刷新且 Zustand 状态同步完成
+            if (this.config.autoArchive ?? true) {
+                await new Promise(r => setTimeout(r, 0));
                 await this.checkAndArchiveEntities();
             }
         } catch (error) {
@@ -391,11 +393,16 @@ export class EntityBuilder {
     async checkAndArchiveEntities(): Promise<void> {
         try {
             const store = useMemoryStore.getState();
+            // V1.4.3 Fix: 强化配置默认值保护，避免 undefined 导致逻辑失效
+            const isEnabled = this.config.autoArchive ?? true;
+            const limit = this.config.archiveLimit ?? 50;
+
+            if (!isEnabled) return;
+
             const allEntities = await store.getAllEntities();
 
             // 仅统计未归档的实体
             const activeEntities = allEntities.filter(e => !e.is_archived);
-            const limit = this.config.archiveLimit || 50;
 
             if (activeEntities.length <= limit) {
                 return;
@@ -415,6 +422,9 @@ export class EntityBuilder {
                     names: toArchive.map(e => e.name)
                 });
                 await store.archiveEntities(ids);
+
+                // V1.4.3: 广播事件，通知 UI (如 EntityConfigPanel) 刷新状态
+                EventBus.emit({ type: 'ENTITY_ARCHIVED', payload: { archivedIds: ids } });
             }
         } catch (error) {
             Logger.error(LogModule.MEMORY_ENTITY, '执行实体自动归档失败', { error });

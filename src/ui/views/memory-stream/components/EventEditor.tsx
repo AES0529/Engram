@@ -10,7 +10,7 @@ import { TextField } from '@/ui/components/form/FormComponents';
 import { Divider } from '@/ui/components/layout/Divider';
 import { useResponsive } from '@/ui/hooks/useResponsive';
 import { ArrowLeft, Trash2 } from 'lucide-react';
-import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import React, { forwardRef, useCallback, useEffect, useRef, useState } from 'react';
 
 // ==================== 类型定义 ====================
 
@@ -152,7 +152,20 @@ export const EventEditor = forwardRef<EventEditorHandle, EventEditorProps>(({
         }
     };
 
-    const syncToParent = useCallback((overrides: FieldOverrides = {}) => {
+    // V1.2.9: Use overrides.summary if provided, else auto-generate, else use state
+    // Phase 1 Performance Fix: Debounce sync to avoid excessive re-renders in parent
+    const syncToParentDebounced = useMemo(
+        () => debounce((id: string, updates: Partial<EventNode>) => {
+            onSave?.(id, updates);
+        }, 500),
+        [onSave]
+    );
+
+    useEffect(() => {
+        return () => syncToParentDebounced.cancel();
+    }, [syncToParentDebounced]);
+
+    const syncToParent = useCallback((overrides: FieldOverrides = {}, immediate = false) => {
         if (!event) return;
 
         const fields = {
@@ -175,20 +188,26 @@ export const EventEditor = forwardRef<EventEditorHandle, EventEditorProps>(({
             causality: event.structured_kv?.causality || '',
         };
 
-        // V1.2.9: Use overrides.summary if provided, else auto-generate, else use state
         const autoSummary = generateSummaryFromKV(kv);
         const finalSummary = overrides.summary ?? (autoSummary || summary);
 
-        onSave?.(event.id, {
+        const updates = {
             summary: finalSummary,
             structured_kv: { ...event.structured_kv, ...kv },
             significance_score: fields.score,
-        });
-    }, [event, eventType, timeAnchor, location, roleText, logicText, score, summary, onSave]);
+        };
+
+        if (immediate) {
+            syncToParentDebounced.cancel();
+            onSave?.(event.id, updates);
+        } else {
+            syncToParentDebounced(event.id, updates);
+        }
+    }, [event, eventType, timeAnchor, location, roleText, logicText, score, summary, onSave, syncToParentDebounced]);
 
     // 暴露方法给父组件
     useImperativeHandle(ref, () => ({
-        save: () => syncToParent(),
+        save: () => syncToParent({}, true), // Force immediate save
         isDirty: () => isDirty,
     }), [syncToParent, isDirty]);
 
@@ -219,7 +238,7 @@ export const EventEditor = forwardRef<EventEditorHandle, EventEditorProps>(({
     const handleBlur = () => {
         if (blurTimeoutRef.current) clearTimeout(blurTimeoutRef.current);
         blurTimeoutRef.current = window.setTimeout(() => {
-            if (isMountedRef.current && isDirty) syncToParent();
+            if (isMountedRef.current && isDirty) syncToParent({}, true);
         }, 50);
     };
 

@@ -246,30 +246,63 @@ export function useMemoryStream() {
         if (pendingChanges.size === 0 && pendingEntityChanges.size === 0) return;
 
         try {
-            const promises: Promise<any>[] = [];
+            const eventEntries = Array.from(pendingChanges.entries());
+            const entityEntries = Array.from(pendingEntityChanges.entries());
 
-            if (pendingChanges.size > 0) {
-                promises.push(...Array.from(pendingChanges.entries()).map(
-                    ([id, updates]) => store.updateEvent(id, updates)
-                ));
+            const results = await Promise.allSettled([
+                ...eventEntries.map(([id, updates]) => store.updateEvent(id, updates)),
+                ...entityEntries.map(([id, updates]) => store.updateEntity(id, updates))
+            ]);
+
+            const failedEvents = new Set<string>();
+            const failedEntities = new Set<string>();
+            let successCount = 0;
+
+            results.forEach((result, index) => {
+                if (result.status === 'fulfilled') {
+                    successCount++;
+                } else {
+                    if (index < eventEntries.length) {
+                        failedEvents.add(eventEntries[index][0]);
+                    } else {
+                        failedEntities.add(entityEntries[index - eventEntries.length][0]);
+                    }
+                }
+            });
+
+            if (successCount > 0) {
+                notificationService.success(`保存成功，共 ${successCount} 条记录`, 'MemoryStream');
+                // 重新加载数据以刷新 UI 状态，防止回退
+                await loadEvents();
+                await loadEntities();
             }
 
-            if (pendingEntityChanges.size > 0) {
-                promises.push(...Array.from(pendingEntityChanges.entries()).map(
-                    ([id, updates]) => store.updateEntity(id, updates)
-                ));
+            if (failedEvents.size > 0 || failedEntities.size > 0) {
+                notificationService.error(`部分保存失败 (${failedEvents.size + failedEntities.size} 条)，请检查控制台`, 'MemoryStream');
             }
 
-            await Promise.all(promises);
+            // 仅清除成功的变更
+            setPendingChanges(prev => {
+                const newMap = new Map();
+                prev.forEach((v, k) => {
+                    if (failedEvents.has(k)) newMap.set(k, v);
+                });
+                return newMap;
+            });
 
-            notificationService.success(`保存成功，共 ${pendingChanges.size + pendingEntityChanges.size} 条记录`, 'MemoryStream');
-            setPendingChanges(new Map());
-            setPendingEntityChanges(new Map());
+            setPendingEntityChanges(prev => {
+                const newMap = new Map();
+                prev.forEach((v, k) => {
+                    if (failedEntities.has(k)) newMap.set(k, v);
+                });
+                return newMap;
+            });
+
         } catch (e) {
             console.error('[MemoryStream] Batch save failed:', e);
-            notificationService.error('部分保存失败，请检查控制台', 'MemoryStream');
+            notificationService.error('保存过程中发生严重错误', 'MemoryStream');
         }
-    }, [pendingChanges, pendingEntityChanges, store]);
+    }, [pendingChanges, pendingEntityChanges, store, loadEvents, loadEntities]);
 
     const handleDelete = useCallback(async (id: string) => {
         try {

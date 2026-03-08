@@ -342,7 +342,7 @@ class SummarizerService {
     /**
      * 手动/自动触发总结
      */
-    async triggerSummary(manual = false): Promise<SummaryResult | null> {
+    async triggerSummary(manual = false, rangeOverride?: [number, number]): Promise<SummaryResult | null> {
         if (this.isSummarizing) {
             this.log('warn', '正在执行总结，跳过本次触发');
             return null;
@@ -354,7 +354,6 @@ class SummarizerService {
         }
 
         const currentFloor = this.getCurrentFloor();
-        const lastSummarized = await this.getLastSummarizedFloor();
 
         this.isSummarizing = true;
         this.cancelRequested = false; // 重置取消标志
@@ -372,20 +371,27 @@ class SummarizerService {
 
         try {
             // 1. Calculate Range
-            const startFloor = this._lastSummarizedFloor + 1;
-            const buffer = this.config.bufferSize || 0;
-            const maxProcessableFloor = currentFloor - buffer;
+            let startFloor: number;
+            let endFloor: number;
 
-            if (startFloor > maxProcessableFloor) {
-                if (manual) {
-                    notificationService.info('暂无足够的新内容需要总结 (缓冲期内)', 'Engram');
+            if (rangeOverride) {
+                [startFloor, endFloor] = rangeOverride;
+            } else {
+                startFloor = this._lastSummarizedFloor + 1;
+                const buffer = this.config.bufferSize || 0;
+                const maxProcessableFloor = currentFloor - buffer;
+
+                if (startFloor > maxProcessableFloor) {
+                    if (manual) {
+                        notificationService.info('暂无足够的新内容需要总结 (缓冲期内)', 'Engram');
+                    }
+                    return null;
                 }
-                return null;
-            }
 
-            const interval = this.config.floorInterval || 10;
-            const proposedEndFloor = startFloor + interval - 1;
-            const endFloor = Math.min(maxProcessableFloor, proposedEndFloor);
+                const interval = this.config.floorInterval || 10;
+                const proposedEndFloor = startFloor + interval - 1;
+                endFloor = Math.min(maxProcessableFloor, proposedEndFloor);
+            }
 
             if (startFloor > endFloor) return null;
 

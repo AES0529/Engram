@@ -208,16 +208,8 @@ export const EntityEditor = forwardRef<EntityEditorHandle, EntityEditorProps>(({
             setDescription(newDesc);
             setIsDirty(true);
 
-            // V1.2.9 FIX: Directly call onSave with new values to avoid stale closure
-            // (syncToParent captures old description value from closure)
-            const updates: Partial<EntityNode> = {
-                name,
-                type: type as EntityType,
-                aliases: aliases.split(/[,，]/).map(s => s.trim()).filter(Boolean),
-                description: newDesc, // Use the new value directly!
-                profile: profileObj,
-            };
-            onSave?.(entity.id, updates);
+            // V1.2.9 FIX: Only send incremental updates to avoid stale closure overwriting
+            onSave?.(entity.id, { description: newDesc, profile: profileObj });
 
         } catch (e) {
             alert('Profile JSON 格式错误，无法生成描述');

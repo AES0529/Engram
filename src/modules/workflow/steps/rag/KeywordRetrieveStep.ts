@@ -90,7 +90,17 @@ export class KeywordRetrieveStep implements IStep {
         }
 
         // 4.2. 关系多跳 (第二跳)
-        // 遍历初始命中的实体，寻找他们的 relations
+        // 优化方案 (V1.4.3): 预构建实体名 -> 实体 Map 以便快速查找，消除 O(N) 复杂度的 find
+        const entryMap = new Map<string, any>();
+        for (const e of allEntities) {
+            entryMap.set(e.name.toLowerCase(), e);
+            if (Array.isArray(e.aliases)) {
+                for (const alias of e.aliases) {
+                    entryMap.set(alias.toLowerCase(), e);
+                }
+            }
+        }
+
         const hopAttenuation = 0.8; // 多跳衰减系数
 
         for (const seedEntity of hitEntities) {
@@ -102,10 +112,8 @@ export class KeywordRetrieveStep implements IStep {
 
             // 遍历声明的所有关联网
             for (const targetName of Object.keys(relations)) {
-                const targetEntity = allEntities.find(e =>
-                    e.name.toLowerCase() === targetName.toLowerCase() ||
-                    (Array.isArray(e.aliases) && e.aliases.some(a => a.toLowerCase() === targetName.toLowerCase()))
-                );
+                // 使用 Map 替代 O(N) 的 allEntities.find
+                const targetEntity = entryMap.get(targetName.toLowerCase());
 
                 if (targetEntity) {
                     const currentScore = keywordEntityMap.get(targetEntity.id) || 0;

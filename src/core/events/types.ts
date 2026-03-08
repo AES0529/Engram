@@ -17,6 +17,7 @@ export type EngramEventType =
     | 'MEMORY_STORED'
     | 'RETRIEVAL_START'
     | 'RETRIEVAL_COMPLETE'
+    | 'ENTITY_ARCHIVED' // V1.4.3: 自动/手动归档完成
     | 'UI_NAVIGATE_REQUEST' // V0.9.10: 通知系统触发 UI 跳转
     | 'WORKFLOW_FAILED';
 

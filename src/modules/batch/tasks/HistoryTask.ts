@@ -165,26 +165,34 @@ export class HistoryTask implements IBatchTaskHandler {
             if (checkStopSignal()) return;
 
             const state = await chatManager.getState();
-            // @ts-ignore - 同上，规避类型遗漏
-            const currentFloor = state.current_floor || 0;
-            // 找到下一次提起的基线
-            const nextBatchEnd = Math.min(task.floorRange.end, state.last_summarized_floor! + summaryInterval);
+            const startBase = task.floorRange.start;
+            const totalToProcess = task.floorRange.end - startBase;
 
-            // This is a coarse simulation of the loop, since summarizer internal handles ranges itself
-            try {
-                const res = await summarizerService.triggerSummary(true);
-                const newState = await chatManager.getState();
-                const actualJump = newState.last_summarized_floor! - state.last_summarized_floor!;
+            // 我们改为基于当前任务定义的范围进行循环，而不是全局状态
+            while (processedFloors < totalToProcess) {
+                if (checkStopSignal()) return;
 
-                if (actualJump > 0) {
-                    processedFloors += actualJump;
-                } else {
-                    // Fallback to avoid infinite loop
-                    processedFloors += summaryInterval;
+                // 计算当前这一切片的范围
+                // 考虑基准点：当前已处理 + 起始点
+                const currentSliceStart = startBase + processedFloors;
+                const currentSliceEnd = Math.min(task.floorRange.end, currentSliceStart + summaryInterval - 1);
+
+                if (currentSliceStart > currentSliceEnd) break;
+
+                try {
+                    // 核心修改：向 triggerSummary 传递明确的 range
+                    const res = await summarizerService.triggerSummary(true, [currentSliceStart, currentSliceEnd]);
+
+                    // 无论成功与否，我们都推进 processedFloors，因为逻辑已外置
+                    processedFloors += (currentSliceEnd - currentSliceStart + 1);
+                } catch (err: any) {
+                    Logger.error(LogModule.BATCH, `Summary Failed at range ${currentSliceStart}-${currentSliceEnd}`, { error: err.message });
+                    processedFloors += summaryInterval; // 跳过此分片
                 }
-            } catch (err: any) {
-                Logger.error(LogModule.BATCH, `Summary Failed at floor ${state.last_summarized_floor}`, { error: err.message });
-                processedFloors += summaryInterval; // Skip problematic floor chunk
+
+                yield; // 释放控制权给 Engine 处理 Event loop
+
+                updateProgress(taskIndex, Math.min(task.progress.total, Math.ceil(processedFloors / summaryInterval)));
             }
 
             yield; // 释放控制权给 Engine 处理 Event loop
@@ -207,21 +215,23 @@ export class HistoryTask implements IBatchTaskHandler {
         while (processedFloors < task.floorRange.end - task.floorRange.start) {
             if (checkStopSignal()) return;
 
-            const state = await chatManager.getState();
-            const lastExtracted = state.last_extracted_floor || 0;
-            // @ts-ignore - 规避旧有类型定义遗漏
-            const currentFloor = state.current_floor || 0;
+            const startBase = task.floorRange.start;
+            const currentSliceStart = startBase + processedFloors;
+            const currentSliceEnd = Math.min(task.floorRange.end, currentSliceStart + entityInterval - 1);
+
+            if (currentSliceStart > currentSliceEnd) break;
 
             try {
-                const res = await entityBuilder.extractFromChat('', currentFloor, true);
+                // 核心修改：明确传递 range，不再依赖内部 auto-delta
+                const res = await entityBuilder.extractByRange([currentSliceStart, currentSliceEnd], true);
                 if (res && !res.success) {
-                    Logger.warn(LogModule.BATCH, `Entity extract failed`, { error: res.error });
+                    Logger.warn(LogModule.BATCH, `Entity extract failed for range ${currentSliceStart}-${currentSliceEnd}`, { error: res.error });
                 }
             } catch (err: any) {
-                Logger.error(LogModule.BATCH, `Entity extract exception`, { error: err.message });
+                Logger.error(LogModule.BATCH, `Entity extract exception for range ${currentSliceStart}-${currentSliceEnd}`, { error: err.message });
             }
 
-            processedFloors += entityInterval;
+            processedFloors += (currentSliceEnd - currentSliceStart + 1);
             yield; // 释放控制权
             updateProgress(taskIndex, Math.min(task.progress.total, Math.ceil(processedFloors / entityInterval)));
         }
