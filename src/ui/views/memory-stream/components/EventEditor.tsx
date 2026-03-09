@@ -9,8 +9,9 @@ import type { EventNode } from '@/data/types/graph';
 import { TextField } from '@/ui/components/form/FormComponents';
 import { Divider } from '@/ui/components/layout/Divider';
 import { useResponsive } from '@/ui/hooks/useResponsive';
+import { debounce } from 'lodash';
 import { ArrowLeft, Trash2 } from 'lucide-react';
-import React, { forwardRef, useCallback, useEffect, useRef, useState } from 'react';
+import React, { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef, useState } from 'react';
 
 // ==================== 类型定义 ====================
 
@@ -300,21 +301,8 @@ export const EventEditor = forwardRef<EventEditorHandle, EventEditorProps>(({
                     onChange={(value: string) => {
                         setSummary(value);
                         setIsDirty(true);
-                        // Summary 变更不立即 sync，依赖 blur 或 save?
-                        // 为了保持一致性，还是 sync 吧，但要注意 updateField 逻辑
-                        // 这里直接手动 sync
-                        onSave?.(event.id, {
-                            summary: value,
-                            structured_kv: {
-                                event: eventType,
-                                time_anchor: timeAnchor,
-                                location: location.split(',').map(s => s.trim()).filter(Boolean),  // V1.0.2
-                                role: roleText.split(',').map(s => s.trim()).filter(Boolean),
-                                logic: logicText.split(',').map(s => s.trim()).filter(Boolean),
-                                causality: event.structured_kv?.causality || '',
-                            },
-                            significance_score: score,
-                        });
+                        // 走统一防抖链路，避免每次输入都触发父层全量重算
+                        syncToParent({ summary: value });
                     }}
                     multiline
                     rows={6}

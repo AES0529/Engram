@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.4.4] - 2026-03-09
+
+### 🛡️ 实体提取链路稳定性修复 (Entity Extractor Stability)
+
+- **自动触发范围防倒挂**:
+  - 修复了自动提取链路在楼层回溯后可能生成倒置区间的问题。
+  - 在 [`handleMessageReceived()`](src/modules/memory/EntityExtractor.ts:85) 内新增 `startFloor <= currentFloor` 保护，避免向底层历史拉取传入非法范围。
+- **触发判定函数纯化**:
+  - [`shouldTriggerOnFloor()`](src/modules/memory/EntityExtractor.ts:158) 由“判断 + 隐式写状态”重构为纯判断函数。
+  - 楼层回溯时的状态对齐副作用迁移至调用方 [`handleMessageReceived()`](src/modules/memory/EntityExtractor.ts:85)，链路职责更清晰、行为更可预测。
+- **可观测性增强**:
+  - 为回溯短路、状态对齐成功/失败、未满足触发条件等路径补充结构化日志，便于线上定位与回归排查。
+
+### ⚡ Memory Stream 编辑性能优化
+
+- **摘要编辑防抖同步**:
+  - 将事件编辑器摘要字段改为统一走防抖同步链路，避免每次输入都触发上层状态重算。
+  - 缓解了大数据量记忆流下输入卡顿问题，提升编辑体验。
+
+### ✅ 测试与质量保障
+
+- **新增 `EntityExtractor` 专项测试**:
+  - 新增 [`test/entity-extractor.test.ts`](test/entity-extractor.test.ts)，覆盖以下关键场景：
+    - 回溯场景下 [`shouldTriggerOnFloor()`](src/modules/memory/EntityExtractor.ts:158) 仅返回 `false` 且无状态写入副作用。
+    - `lastSummarized > currentFloor` 时自动触发范围被正确钳制，不会倒挂。
+    - `currentFloor < lastExtracted` 时会执行 `last_extracted_floor` 对齐并跳过本轮提取。
+- **测试执行通过**:
+  - 已通过 [`vitest`](vitest.config.ts:4) 定向用例验证，确保修复可回归。
+
 ## [1.4.3] - 2026-03-07
 
 ### ✨ 记忆生命周期管理与召回优化 (Memory Lifecycle & Retrieval Granularity)

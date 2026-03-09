@@ -88,6 +88,25 @@ export class EntityBuilder {
         const state = await chatManager.getState();
         const lastExtracted = state.last_extracted_floor || 0;
 
+        // 回溯保护（调用方处理副作用）：楼层回溯时对齐状态并终止本轮自动触发
+        const pendingFloors = currentFloor - lastExtracted;
+        if (pendingFloors < 0) {
+            Logger.warn(LogModule.MEMORY_ENTITY, '检测到楼层回溯，自动对齐 last_extracted_floor 并跳过本轮触发', {
+                currentFloor,
+                lastExtracted,
+            });
+
+            try {
+                await chatManager.updateState({ last_extracted_floor: currentFloor });
+                Logger.info(LogModule.MEMORY_ENTITY, '楼层回溯状态对齐完成', {
+                    last_extracted_floor: currentFloor,
+                });
+            } catch (e) {
+                Logger.error(LogModule.MEMORY_ENTITY, '楼层回溯状态对齐失败', { error: e });
+            }
+            return;
+        }
+
         // Use the robust delta check
         if (this.shouldTriggerOnFloor(currentFloor, lastExtracted)) {
             Logger.info(LogModule.MEMORY_ENTITY, 'Triggering Entity Extraction (Auto)', {
@@ -105,13 +124,31 @@ export class EntityBuilder {
                 startFloor = currentFloor - 49;
             }
 
+            // P0 修复：自动触发也要保证 range 不倒挂
+            if (startFloor > currentFloor) {
+                Logger.warn(LogModule.MEMORY_ENTITY, '自动提取起始楼层大于当前楼层，已执行反倒挂修正', {
+                    startFloor,
+                    currentFloor,
+                    lastSummarized,
+                });
+                startFloor = currentFloor;
+            }
+
             const range: [number, number] = [startFloor, currentFloor];
 
             // Trigger extraction (non-blocking)
             this.extractByRange(range, false).catch(err => {
                 Logger.error(LogModule.MEMORY_ENTITY, 'Auto-extraction failed', { error: err });
             });
+            return;
         }
+
+        Logger.debug(LogModule.MEMORY_ENTITY, '本轮未满足自动提取触发条件', {
+            currentFloor,
+            lastExtracted,
+            pendingFloors,
+            floorInterval: this.config.floorInterval,
+        });
     }
 
     /**
@@ -136,13 +173,12 @@ export class EntityBuilder {
         // V0.9.13: 使用增量触发 (Delta) 而非整除触发 (Modulo)
         const pendingFloors = currentFloor - lastExtractedFloor;
 
-        // Fix P0: 楼层回溯 Bug 保护
-        // 如果 pendingFloors < 0，说明用户在酒馆进行了删回车操作，导致 currentFloor 变小
+        // 纯判断：回溯保护由调用方处理副作用，这里只返回 false
         if (pendingFloors < 0) {
-            Logger.warn(LogModule.MEMORY_ENTITY, '检测到楼层回溯，重置 last_extracted_floor', { currentFloor, lastExtractedFloor });
-            // 同步将状态向后重置对齐，避免永久不触发
-            chatManager.updateState({ last_extracted_floor: currentFloor }).catch(e => {
-                Logger.error(LogModule.MEMORY_ENTITY, '回溯重置状态失败', { error: e });
+            Logger.debug(LogModule.MEMORY_ENTITY, '楼层回溯场景：shouldTriggerOnFloor 返回 false（无副作用）', {
+                currentFloor,
+                lastExtractedFloor,
+                pendingFloors,
             });
             return false;
         }
