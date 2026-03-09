@@ -5,7 +5,7 @@
     "type": "module",
     "main": "src/index.tsx",
     "scripts": {
-        "dev": "node scripts/dev-proxy.js && vite",
+        "dev": "vite",
         "dev:watch": "vite build --watch",
         "build": "vite build",
         "preview": "vite preview",

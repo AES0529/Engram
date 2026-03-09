@@ -65,19 +65,21 @@ cd Engram
 如果您想参与开发或自行构建：
 
 ```bash
-# 安装依赖
-npm install
+# 安装依赖（推荐 pnpm）
+pnpm install
 
 # 启动 HMR 开发模式 (推荐)
 # 支持热更新，修改代码后无需刷新浏览器
-npm run dev
+pnpm run dev
 
 # 生产环境构建
-npm run build
+pnpm run build
 
 # 传统监听模式
-npm run dev:watch
+pnpm run dev:watch
 ```
+
+> 说明：项目已切换为 `pnpm` 工作流，建议使用 `pnpm-lock.yaml` 进行依赖锁定与安装。
 
 ---
 
