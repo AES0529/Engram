@@ -164,6 +164,8 @@ export interface EngramAPISettings {
     customMacros?: CustomMacro[];
     /** V1.1.0: 世界书配置方案 */
     worldbookProfiles?: WorldbookConfigProfile[];
+    /** V1.4.6: 是否启用 UI 动画 (全局开关) */
+    enableAnimations?: boolean;
 }
 
 
@@ -252,5 +254,6 @@ export function getDefaultAPISettings(): EngramAPISettings {
         recallConfig: { ...DEFAULT_RECALL_CONFIG }, // V0.8.5
         customMacros: [...DEFAULT_CUSTOM_MACROS], // V0.9.2
         worldbookProfiles: [], // V1.1.0
+        enableAnimations: true, // V1.4.6
     };
 }

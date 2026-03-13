@@ -1,3 +1,4 @@
+import { useConfigStore } from '@/state/configStore';
 import { useResponsive } from '@/ui/hooks/useResponsive';
 import { AnimatePresence, motion } from 'framer-motion';
 import React from 'react';
@@ -32,14 +33,6 @@ interface MasterDetailLayoutProps {
     style?: React.CSSProperties;
 }
 
-/**
- * MasterDetailLayout - 响应式双栏布局组件
- *
- * 特性：
- * - PC端：左列表右详情，双列独立滚动，高度自适应
- * - 移动端：列表展示，通过 mobileDetailOpen 控制全屏详情页
- * - 统一的滚动条隐藏样式
- */
 export const MasterDetailLayout: React.FC<MasterDetailLayoutProps> = ({
     list,
     detail,
@@ -54,6 +47,7 @@ export const MasterDetailLayout: React.FC<MasterDetailLayoutProps> = ({
     style,
 }) => {
     const { isMobile } = useResponsive();
+    const enableAnimations = useConfigStore(state => state.enableAnimations);
 
     // 移动端全屏详情页
     if (isMobile && mobileDetailOpen) {
@@ -81,13 +75,13 @@ export const MasterDetailLayout: React.FC<MasterDetailLayoutProps> = ({
             <div className="flex-1 flex gap-6 min-h-0 overflow-hidden relative">
                 {/* 左侧：列表区域 - 使用 framer-motion layout 平滑改变宽度 */}
                 <motion.div
-                    layout
+                    layout={enableAnimations}
                     initial={false}
                     animate={{
                         width: isMobile ? '100%' : listWidth,
                         minWidth: isMobile ? 'auto' : '240px'
                     }}
-                    transition={{ type: "spring", bounce: 0.1, duration: 0.4 }}
+                    transition={enableAnimations ? { type: "spring", bounce: 0.1, duration: 0.4 } : { duration: 0 }}
                     className={`
                         flex flex-col min-h-0 shrink-0
                         ${isMobile ? 'w-full' : 'border-r border-border/50 pr-4'}
@@ -99,20 +93,30 @@ export const MasterDetailLayout: React.FC<MasterDetailLayoutProps> = ({
 
                 {/* 右侧：详情区域 - 优雅滑入进场 */}
                 {!isMobile && (
-                    <AnimatePresence>
-                        {detail && (
-                            <motion.div
-                                key="detail-pane"
-                                initial={{ opacity: 0, x: 20 }}
-                                animate={{ opacity: 1, x: 0 }}
-                                exit={{ opacity: 0, x: 20, position: 'absolute', right: 0 }}
-                                transition={{ type: "spring", bounce: 0, duration: 0.4 }}
-                                className="flex-1 flex flex-col min-h-0 min-w-0"
-                            >
-                                {detail}
-                            </motion.div>
+                    <>
+                        {enableAnimations ? (
+                            <AnimatePresence mode="wait">
+                                {detail && (
+                                    <motion.div
+                                        key="detail-pane"
+                                        initial={{ opacity: 0, x: 20 }}
+                                        animate={{ opacity: 1, x: 0 }}
+                                        exit={{ opacity: 0, x: 20, position: 'absolute', right: 0 }}
+                                        transition={{ type: "spring", bounce: 0, duration: 0.4 }}
+                                        className="flex-1 flex flex-col min-h-0 min-w-0"
+                                    >
+                                        {detail}
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        ) : (
+                            detail && (
+                                <div key="detail-pane" className="flex-1 flex flex-col min-h-0 min-w-0">
+                                    {detail}
+                                </div>
+                            )
                         )}
-                    </AnimatePresence>
+                    </>
                 )}
             </div>
         </div>

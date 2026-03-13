@@ -1,5 +1,5 @@
 import { MacroService } from '@/integrations/tavern';
-import { ArrowDownUp, Database, FileText, Filter, RefreshCw, Save, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowDownUp, Database, FileText, Filter, Plus, RefreshCw, Save, Sparkles, Trash2 } from 'lucide-react';
 import React from 'react';
 import type { SortOrder, ViewTab } from '../hooks/useMemoryStream';
 
@@ -26,6 +26,7 @@ interface ActionBarProps {
     onPreviewClick: (content: string) => void;
     onMobileActionsToggle: () => void;
     onMobileActionsClose: () => void;
+    onCreate?: () => void;
 }
 
 export const ActionBar: React.FC<ActionBarProps> = ({
@@ -49,6 +50,7 @@ export const ActionBar: React.FC<ActionBarProps> = ({
     onPreviewClick,
     onMobileActionsToggle,
     onMobileActionsClose,
+    onCreate,
 }) => {
 
     const handlePreviewOpen = () => {
@@ -93,6 +95,17 @@ export const ActionBar: React.FC<ActionBarProps> = ({
             {!isMobile ? (
                 // =============== 桌面端工具栏 ===============
                 <div className="flex items-center gap-2 ml-1">
+                    {/* 手动添加按钮 */}
+                    {onCreate && (
+                        <button
+                            onClick={onCreate}
+                            className="inline-flex items-center gap-1.5 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground rounded transition-colors"
+                            title={viewTab === 'list' ? '手动添加事件' : '手动添加实体'}
+                        >
+                            <Plus size={12} />
+                            添加
+                        </button>
+                    )}
                     <button
                         onClick={onImportClick}
                         className="inline-flex items-center gap-1.5 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground rounded transition-colors"
@@ -158,6 +171,15 @@ export const ActionBar: React.FC<ActionBarProps> = ({
                         <>
                             <div className="fixed inset-0 z-40" onClick={onMobileActionsClose} />
                             <div className="absolute right-0 top-full mt-2 w-40 bg-background border border-border rounded-md shadow-lg py-1 z-50 flex flex-col">
+                                {onCreate && (
+                                    <button
+                                        onClick={() => { onCreate(); onMobileActionsClose(); }}
+                                        className="flex items-center gap-2 px-3 py-2 text-xs text-foreground hover:bg-muted text-left"
+                                    >
+                                        <Plus size={14} className="text-primary" />
+                                        {viewTab === 'list' ? '添加事件' : '添加实体'}
+                                    </button>
+                                )}
                                 <button
                                     onClick={() => { onImportClick(); onMobileActionsClose(); }}
                                     className="flex items-center gap-2 px-3 py-2 text-xs text-foreground hover:bg-muted text-left"

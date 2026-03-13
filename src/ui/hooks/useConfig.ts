@@ -25,6 +25,7 @@ export interface UseConfigReturn {
     entityExtractConfig: EntityExtractConfig;
     embeddingConfig: EmbeddingConfig;
     customMacros: CustomMacro[];
+    enableAnimations: boolean;
 
     updateVectorConfig: (config: VectorConfig) => void;
     updateRerankConfig: (config: RerankConfig) => void;
@@ -32,6 +33,7 @@ export interface UseConfigReturn {
     updateRegexConfig: (config: GlobalRegexConfig) => void;
     updateEntityExtractConfig: (config: EntityExtractConfig) => void;
     updateEmbeddingConfig: (config: EmbeddingConfig) => void;
+    updateEnableAnimations: (enabled: boolean) => void;
 
     // Batch update interface (New Feature)
     updateMultipleConfigs: (updates: Partial<{
@@ -42,6 +44,7 @@ export interface UseConfigReturn {
         entityExtractConfig: EntityExtractConfig;
         embeddingConfig: EmbeddingConfig;
         customMacros: CustomMacro[];
+        enableAnimations: boolean;
     }>) => void;
 
     // 自定义宏
@@ -65,6 +68,7 @@ export function useConfig(): UseConfigReturn {
         entityExtractConfig: store.entityExtractConfig,
         embeddingConfig: store.embeddingConfig,
         customMacros: store.customMacros,
+        enableAnimations: store.enableAnimations,
         hasChanges: store.hasChanges,
 
         updateVectorConfig: store.updateVectorConfig,
@@ -73,6 +77,7 @@ export function useConfig(): UseConfigReturn {
         updateRegexConfig: store.updateRegexConfig,
         updateEntityExtractConfig: store.updateEntityExtractConfig,
         updateEmbeddingConfig: store.updateEmbeddingConfig,
+        updateEnableAnimations: store.updateEnableAnimations,
 
         updateMultipleConfigs: store.updateMultipleConfigs,
 

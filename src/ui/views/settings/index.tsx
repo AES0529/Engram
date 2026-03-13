@@ -8,11 +8,13 @@ import { useMemoryStore } from "@/state/memoryStore";
 import { Switch } from "@/ui/components/core/Switch";
 import { PageTitle } from "@/ui/components/display/PageTitle";
 import { NumberField } from '@/ui/components/form/FormComponents';
-import { Eye, RefreshCw, Settings as SettingsIcon, Trash2 } from 'lucide-react';
+import { Eye, RefreshCw, Settings as SettingsIcon, Sparkles, Trash2 } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
+import { useConfigStore } from "@/state/configStore";
 import { ThemeSelector } from './components/ThemeSelector';
 
 export const Settings: React.FC = () => {
+    const { enableAnimations, updateEnableAnimations, saveConfig } = useConfigStore();
     const [previewEnabled, setPreviewEnabled] = useState(SettingsManager.getSettings().summarizerConfig?.previewEnabled ?? true);
     const [preprocessingPreviewEnabled, setPreprocessingPreviewEnabled] = useState(SettingsManager.getSettings().preprocessingConfig?.preview ?? DEFAULT_PREPROCESSING_CONFIG.preview);
 
@@ -48,7 +50,33 @@ export const Settings: React.FC = () => {
                 {/* Theme Section */}
                 <section>
                     <h3 className="text-sm font-medium text-muted-foreground uppercase tracking-wider mb-4">外观</h3>
-                    <ThemeSelector />
+                    <div className="space-y-4">
+                        <ThemeSelector />
+                        
+                        {/* 动画设置开关 (V1.4.6) */}
+                        <div className="bg-muted/30 border border-border rounded-lg p-4">
+                            <div className="flex items-center justify-between gap-3">
+                                <div className="flex items-center gap-3 min-w-0 flex-1">
+                                    <div className="p-2 rounded-lg bg-primary/10 text-primary flex-shrink-0">
+                                        <Sparkles size={20} />
+                                    </div>
+                                    <div className="min-w-0 flex-1">
+                                        <h4 className="font-medium text-foreground truncate">启用 UI 动画</h4>
+                                        <p className="text-sm text-muted-foreground line-clamp-2">
+                                            开启或关闭开场、切页及交互动画，关闭可提升低配设备的响应速度
+                                        </p>
+                                    </div>
+                                </div>
+                                <Switch
+                                    checked={enableAnimations}
+                                    onChange={(checked) => {
+                                        updateEnableAnimations(checked);
+                                        saveConfig();
+                                    }}
+                                />
+                            </div>
+                        </div>
+                    </div>
                 </section>
 
                 {/* Glass Settings Section (Visual) */}

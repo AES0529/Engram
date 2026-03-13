@@ -3,7 +3,7 @@ import { Divider } from "@/ui/components/layout/Divider";
 import { LayoutTabs } from "@/ui/components/layout/LayoutTabs";
 import { MasterDetailLayout } from "@/ui/components/layout/MasterDetailLayout";
 import { MobileFullscreenForm } from "@/ui/components/layout/MobileFullscreenForm";
-import { Trash2 } from 'lucide-react';
+import { Save, Trash2 } from 'lucide-react';
 import React, { useRef } from 'react';
 
 // Hooks
@@ -44,9 +44,20 @@ export const MemoryStream: React.FC = () => {
                     title="编辑事件"
                     onClose={ms.handleCloseEditor}
                     actions={
-                        <button onClick={() => ms.selectedId && ms.handleDelete(ms.selectedId)} className="p-1.5 hover:bg-destructive/10 rounded text-destructive mr-1 transition-colors">
-                            <Trash2 size={16} />
-                        </button>
+                        <div className="flex items-center">
+                            {ms.hasChanges && (
+                                <button
+                                    onClick={ms.handleBatchSave}
+                                    className="p-1.5 hover:bg-primary/10 rounded text-primary mr-1 transition-colors"
+                                    title="保存"
+                                >
+                                    <Save size={16} />
+                                </button>
+                            )}
+                            <button onClick={() => ms.selectedId && ms.handleDelete(ms.selectedId)} className="p-1.5 hover:bg-destructive/10 rounded text-destructive mr-1 transition-colors">
+                                <Trash2 size={16} />
+                            </button>
+                        </div>
                     }
                 >
                     <EventEditor
@@ -67,9 +78,20 @@ export const MemoryStream: React.FC = () => {
                     title="编辑实体"
                     onClose={ms.handleCloseEditor}
                     actions={
-                        <button onClick={() => ms.selectedId && ms.handleDelete(ms.selectedId)} className="p-1.5 hover:bg-destructive/10 rounded text-destructive mr-1 transition-colors">
-                            <Trash2 size={16} />
-                        </button>
+                        <div className="flex items-center">
+                            {ms.hasChanges && (
+                                <button
+                                    onClick={ms.handleBatchSave}
+                                    className="p-1.5 hover:bg-primary/10 rounded text-primary mr-1 transition-colors"
+                                    title="保存"
+                                >
+                                    <Save size={16} />
+                                </button>
+                            )}
+                            <button onClick={() => ms.selectedId && ms.handleDelete(ms.selectedId)} className="p-1.5 hover:bg-destructive/10 rounded text-destructive mr-1 transition-colors">
+                                <Trash2 size={16} />
+                            </button>
+                        </div>
                     }
                 >
                     <EntityEditor
@@ -120,6 +142,7 @@ export const MemoryStream: React.FC = () => {
                         onPreviewClick={(content) => { ms.setPreviewContent(content); ms.setShowPreview(true); }}
                         onMobileActionsToggle={() => ms.setShowMobileActions(!ms.showMobileActions)}
                         onMobileActionsClose={() => ms.setShowMobileActions(false)}
+                        onCreate={ms.viewTab === 'list' ? ms.handleCreateEvent : ms.handleCreateEntity}
                     />
                 }
             />

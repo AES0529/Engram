@@ -378,6 +378,54 @@ export function useMemoryStream() {
         }
     }, [loadEvents]);
 
+    // ==========================================
+    // 手动创建事件 / 实体 (V1.4.6: 直接写入 DB)
+    // ==========================================
+
+    const handleCreateEvent = useCallback(async () => {
+        try {
+            const newEvent = await store.saveEvent({
+                summary: '',
+                structured_kv: {
+                    time_anchor: '',
+                    role: [],
+                    location: [],
+                    event: '',
+                    logic: [],
+                    causality: '',
+                },
+                is_embedded: false,
+                is_archived: false,
+                significance_score: 0.5,
+                level: 0,
+                source_range: { start_index: 0, end_index: 0 },
+            });
+            await loadEvents();
+            setSelectedId(newEvent.id);
+            setViewMode('edit');
+            notificationService.success('已创建新事件，请编辑', 'MemoryStream');
+        } catch (e: any) {
+            notificationService.error('创建事件失败: ' + (e.message || '未知错误'), 'MemoryStream');
+        }
+    }, [store.saveEvent, loadEvents]);
+
+    const handleCreateEntity = useCallback(async () => {
+        try {
+            const newEntity = await store.saveEntity({
+                name: '新实体',
+                type: 'unknown' as any,
+                aliases: [],
+                description: '',
+                profile: {},
+            });
+            await loadEntities();
+            setSelectedId(newEntity.id);
+            setViewMode('edit');
+            notificationService.success('已创建新实体，请编辑', 'MemoryStream');
+        } catch (e: any) {
+            notificationService.error('创建实体失败: ' + (e.message || '未知错误'), 'MemoryStream');
+        }
+    }, [store.saveEntity, loadEntities]);
 
     const handleOpenImportModal = useCallback(async () => {
         if (hasChanges) {
@@ -455,6 +503,7 @@ export function useMemoryStream() {
         handleToggleEventLock,
         handleBatchSave, handleDelete, handleBatchDelete,
         handleReembedAll, handleOpenImportModal, handleImportExecute,
+        handleCreateEvent, handleCreateEntity,
         loadEvents, loadEntities,
     };
 }

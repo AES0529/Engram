@@ -20,6 +20,7 @@ export interface ConfigState {
     entityExtractConfig: EntityExtractConfig;
     embeddingConfig: EmbeddingConfig;
     customMacros: CustomMacro[];
+    enableAnimations: boolean;
     hasChanges: boolean;
 
     updateVectorConfig: (config: VectorConfig) => void;
@@ -28,6 +29,7 @@ export interface ConfigState {
     updateRegexConfig: (config: GlobalRegexConfig) => void;
     updateEntityExtractConfig: (config: EntityExtractConfig) => void;
     updateEmbeddingConfig: (config: EmbeddingConfig) => void;
+    updateEnableAnimations: (enabled: boolean) => void;
 
     // Batch update to reduce re-renders
     updateMultipleConfigs: (updates: Partial<Omit<ConfigState, 'hasChanges' | 'initFromSettings' | 'saveConfig' | 'updateMultipleConfigs' | 'addCustomMacro' | 'updateCustomMacro' | 'deleteCustomMacro' | 'toggleCustomMacro'>>) => void;
@@ -51,6 +53,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     entityExtractConfig: savedContext.entityExtractConfig || defaults.entityExtractConfig || { enabled: false, trigger: 'floor', floorInterval: 10, keepRecentCount: 5 },
     embeddingConfig: savedContext.embeddingConfig || defaults.embeddingConfig || DEFAULT_EMBEDDING_CONFIG,
     customMacros: savedContext.customMacros || defaults.customMacros || [],
+    enableAnimations: savedContext.enableAnimations ?? defaults.enableAnimations ?? true,
     hasChanges: false,
 
     updateVectorConfig: (config) => set({ vectorConfig: config, hasChanges: true }),
@@ -59,6 +62,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     updateRegexConfig: (config) => set({ regexConfig: config, hasChanges: true }),
     updateEntityExtractConfig: (config) => set({ entityExtractConfig: config, hasChanges: true }),
     updateEmbeddingConfig: (config) => set({ embeddingConfig: config, hasChanges: true }),
+    updateEnableAnimations: (enabled) => set({ enableAnimations: enabled, hasChanges: true }),
 
     updateMultipleConfigs: (updates) => set({ ...updates, hasChanges: true }),
 
@@ -101,6 +105,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
             entityExtractConfig: state.entityExtractConfig,
             embeddingConfig: state.embeddingConfig,
             customMacros: state.customMacros,
+            enableAnimations: state.enableAnimations,
         } as any);
         set({ hasChanges: false });
     }

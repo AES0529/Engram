@@ -108,7 +108,20 @@ export const GlobalStyles = () => {
       -ms-overflow-style: none;
       scrollbar-width: none;
     }
+
+    /* 全局动画开关控制 (V1.4.7) */
+    .engram-no-animations .fade-in,
+    .engram-no-animations .animate-in,
+    .engram-no-animations [class*="engram-animate-"] {
+      animation-duration: 0.001ms !important;
+      animation-delay: 0ms !important;
+      opacity: 1 !important;
+      transform: none !important;
+    }
+
+    .engram-no-animations * {
+      transition-duration: 0ms !important;
+    }
   `}</style>
   );
 };
-

@@ -4,6 +4,7 @@ import Header from '@/ui/components/layout/Header';
 import { Sidebar } from '@/ui/components/layout/Sidebar';
 import { CurtainOverlay } from '@/ui/components/visual/CurtainOverlay';
 import { GlobalStyles } from '@/ui/styles/GlobalStyles';
+import { useConfigStore } from '@/state/configStore';
 import { AnimatePresence, motion } from 'framer-motion';
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 
@@ -15,20 +16,21 @@ interface MainLayoutProps {
 }
 
 export const MainLayout: React.FC<MainLayoutProps> = ({ children, activeTab, setActiveTab, onClose }) => {
+    const { enableAnimations } = useConfigStore();
     const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
     const [showUpdateNotice, setShowUpdateNotice] = useState(false);
     const [hasUnreadUpdate, setHasUnreadUpdate] = useState(false);
     
     // 核心生命周期控制
-    const [isCurtainActive, setIsCurtainActive] = useState(true);
+    const [isCurtainActive, setIsCurtainActive] = useState(enableAnimations);
     const [curtainMode, setCurtainMode] = useState<'entrance' | 'exit'>('entrance');
     // V10: 极致稳定性 - 初始化即决定生命周期内的随机方位，彻底断绝因状态变更导致的重复播放
     const [animationDir] = useState<'left' | 'top'>(() => {
         const dirs: ('left' | 'top')[] = ['left', 'top'];
         return dirs[Math.floor(Math.random() * dirs.length)];
     });
-    const [isReadyToRender, setIsReadyToRender] = useState(false); // 控制组件重绘
-    const [isContentVisible, setIsContentVisible] = useState(false); // 控制透明度
+    const [isReadyToRender, setIsReadyToRender] = useState(!enableAnimations); // 开关关闭时直接渲染
+    const [isContentVisible, setIsContentVisible] = useState(!enableAnimations); // 开关关闭时直接显示
     
     // 内容引用，用于 GSAP 直接驱动同步平移
     const contentRef = useRef<HTMLDivElement>(null);
@@ -57,9 +59,13 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children, activeTab, set
 
     // 拦截关闭请求，执行闭幕动画
     const handleInterceptClose = useCallback(() => {
+        if (!enableAnimations) {
+            onClose();
+            return;
+        }
         setCurtainMode('exit');
         setIsCurtainActive(true);
-    }, []);
+    }, [enableAnimations, onClose]);
 
     // 揭开内容的触发器 (V8: 移入 MainLayout 以确保 Ref 稳定性)
     const handleCurtainReveal = useCallback(() => {
@@ -108,11 +114,11 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children, activeTab, set
     }, []);
 
     return (
-        <div className="flex absolute inset-0 w-full h-full bg-background text-foreground overflow-hidden font-sans selection:bg-primary/30 selection:text-primary" id="engram-layout-root">
+        <div className={`flex absolute inset-0 w-full h-full bg-background text-foreground overflow-hidden font-sans selection:bg-primary/30 selection:text-primary ${!enableAnimations ? 'engram-no-animations' : ''}`} id="engram-layout-root">
             <GlobalStyles />
 
             {/* Curtain Animation Controller - V6 Lifecycle Guard & Color Bridge */}
-            {isCurtainActive && (
+            {enableAnimations && isCurtainActive && (
                 <CurtainOverlay 
                     mode={curtainMode}
                     direction={animationDir}
@@ -131,7 +137,7 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children, activeTab, set
                     className="flex w-full h-full"
                     style={{ 
                         opacity: isContentVisible ? 1 : 0,
-                        pointerEvents: isCurtainActive ? 'none' : 'auto'
+                        pointerEvents: (enableAnimations && isCurtainActive) ? 'none' : 'auto'
                     }}
                 >
                     {/* Update Notice Modal */}
@@ -176,20 +182,31 @@ export const MainLayout: React.FC<MainLayoutProps> = ({ children, activeTab, set
 
                         {/* Main Content Area - Page Transition on Tab Change */}
                         <main className="flex-1 flex flex-col relative w-full overflow-hidden bg-background">
-                            <AnimatePresence mode="popLayout" initial={false}>
-                                <motion.div
+                            {enableAnimations ? (
+                                <AnimatePresence mode="popLayout" initial={false}>
+                                    <motion.div
+                                        key={activeTab}
+                                        initial={{ opacity: 0, y: 15 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -15, scale: 0.98 }}
+                                        transition={{ duration: 0.3, ease: 'easeOut' }}
+                                        className="flex-1 overflow-y-auto overflow-x-hidden pt-0 px-4 md:px-8 lg:px-12 scroll-smooth w-full h-full pb-8 md:pb-12 lg:pb-16"
+                                    >
+                                        <div className="max-w-6xl mx-auto min-h-full pb-20">
+                                            {children}
+                                        </div>
+                                    </motion.div>
+                                </AnimatePresence>
+                            ) : (
+                                <div 
                                     key={activeTab}
-                                    initial={{ opacity: 0, y: 15 }}
-                                    animate={{ opacity: 1, y: 0 }}
-                                    exit={{ opacity: 0, y: -15, scale: 0.98 }}
-                                    transition={{ duration: 0.3, ease: 'easeOut' }}
                                     className="flex-1 overflow-y-auto overflow-x-hidden pt-0 px-4 md:px-8 lg:px-12 scroll-smooth w-full h-full pb-8 md:pb-12 lg:pb-16"
                                 >
                                     <div className="max-w-6xl mx-auto min-h-full pb-20">
                                         {children}
                                     </div>
-                                </motion.div>
-                            </AnimatePresence>
+                                </div>
+                            )}
                         </main>
                     </div>  {/* End Right Content Area */}
                 </div>
