@@ -19,14 +19,15 @@ const REPO_CONFIG = {
     branch: 'master', 
 };
 
-/** 当前开发版本与哈希 */
+/** 当前开发版本 */
 const CURRENT_VERSION = manifest.version;
-const CURRENT_HASH = typeof __COMMIT_HASH__ !== 'undefined' ? __COMMIT_HASH__ : 'unknown';
+const CURRENT_HASH_FALLBACK = 'unknown'; 
 
 /** 缓存 */
 let cachedLatestVersion: string | null = null;
 let cachedLatestHash: string | null = null;
 let cachedRealLocalHash: string | null = null;
+let cachedRealExtensionName: string | null = null;
 let cachedChangelog: string | null = null;
 
 /**
@@ -61,7 +62,7 @@ export class UpdateService {
      * 获取当前哈希 (优先使用后端获取的真实哈希)
      */
     static getCurrentHash(): string {
-        return cachedRealLocalHash || CURRENT_HASH;
+        return cachedRealLocalHash || CURRENT_HASH_FALLBACK;
     }
 
     /**
@@ -76,7 +77,7 @@ export class UpdateService {
             return cachedRealLocalHash;
         }
 
-        return CURRENT_HASH;
+        return CURRENT_HASH_FALLBACK;
     }
 
     /**
@@ -107,12 +108,16 @@ export class UpdateService {
      */
     static async getTavernGitStatus(): Promise<{ isUpToDate: boolean, currentCommitHash: string } | null> {
         try {
+            // 1. 获取真实的扩展名 (如果是第一次)
+            const extensionName = await this.getRealExtensionName();
+            if (!extensionName) return null;
+
             const response = await fetch('/api/extensions/version', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ 
-                    extensionName: 'Engram', 
-                    global: false // 默认为当前用户扩展
+                    extensionName: extensionName, 
+                    global: false 
                 }),
             });
             if (response.ok) {
@@ -122,6 +127,45 @@ export class UpdateService {
             // 静默失败
         }
         return null;
+    }
+
+    /**
+     * 通过酒馆 discover API 找到匹配的真实目录名
+     * 解决开发环境 (Engram_project) 与生产环境 (Engram) 名称不一的问题
+     */
+    static async getRealExtensionName(): Promise<string | null> {
+        if (cachedRealExtensionName) return cachedRealExtensionName;
+
+        try {
+            const response = await fetch('/api/extensions/discover');
+            if (!response.ok) return null;
+
+            const extensions: { name: string; type: string }[] = await response.json();
+            
+            // 查找逻辑：
+            // 1. 先找精确匹配 'Engram_project' 的 (开发环境)
+            // 2. 再找精确匹配 'Engram' 的 (标准安装)
+            // 3. 找以 '/Engram' 结尾的 (三方路径安装)
+            const targetNames = ['Engram_project', 'Engram'];
+            
+            const found = extensions.find(ext => {
+                const name = ext.name.toLowerCase();
+                return targetNames.some(t => name === t.toLowerCase() || name.endsWith('/' + t.toLowerCase()) || name.endsWith('\\' + t.toLowerCase()));
+            });
+
+            if (found) {
+                // 处理可能包含 'third-party/' 前缀的情况
+                const parts = found.name.split(/[/\\]/);
+                cachedRealExtensionName = parts[parts.length - 1];
+                console.debug('[Engram] 自动识别扩展标识:', cachedRealExtensionName);
+                return cachedRealExtensionName;
+            }
+        } catch (e) {
+            console.warn('[Engram] 自动识别目录名失败', e);
+        }
+
+        // 默认兜底
+        return 'Engram';
     }
 
     /**
@@ -225,7 +269,7 @@ export class UpdateService {
      * @param mark 可选，手动指定标记内容 (version@hash)
      */
     static async markAsRead(mark?: string): Promise<void> {
-        const targetMark = mark || `${await this.getLatestVersion() || CURRENT_VERSION}@${await this.getLatestHash() || CURRENT_HASH}`;
+        const targetMark = mark || `${await this.getLatestVersion() || CURRENT_VERSION}@${await this.getLatestHash() || await this.getRealLocalHash()}`;
         
         try {
             SettingsManager.set('lastReadVersion', targetMark);
@@ -243,7 +287,7 @@ export class UpdateService {
         if (!hasUpdate) return false;
 
         const latestVersion = await this.getLatestVersion() || CURRENT_VERSION;
-        const latestHash = await this.getLatestHash() || CURRENT_HASH;
+        const latestHash = await this.getLatestHash() || await this.getRealLocalHash();
         const currentMark = `${latestVersion}@${latestHash}`;
         
         const readMark = this.getReadMark();

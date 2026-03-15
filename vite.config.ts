@@ -5,13 +5,7 @@ import remarkGfm from 'remark-gfm';
 import path from 'path';
 import { execSync } from 'child_process';
 
-const commitHash = (() => {
-    try {
-        return execSync('git rev-parse --short HEAD').toString().trim();
-    } catch (e) {
-        return 'unknown';
-    }
-})();
+const commitHash = 'unknown'; // Git hash is now detected at runtime via tavern API
 
 export default defineConfig(({ mode }) => ({
     plugins: [
