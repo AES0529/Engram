@@ -156,4 +156,8 @@ interface Window {
     readonly createWorldbookEntries: typeof createWorldbookEntries;
     readonly deleteWorldbookEntries: typeof deleteWorldbookEntries;
   };
+
+  /** Native SillyTavern API */
+  SillyTavern: import('./st-api').SillyTavernGlobal;
+  getContext: () => import('./st-api').SillyTavernContext;
 }
