@@ -23,11 +23,12 @@ export class ChatHistoryHelper {
                 if (floorRange) {
                     // 指定范围模式 (Summarizer 用)
                     const [start, end] = floorRange;
+                    // 鲁棒性保护：确保 start 至少为 1，防止 slice(-1) 错误
+                    const effectiveStart = Math.max(1, start);
+                    
                     // slice(start, end) end 是不包含的 (exclusive)，但我们需要包含 end 楼层。
                     // floor 1 对应 index 0。
-                    // 例子: startFloor 21 -> index 20. endFloor 40 -> index 39.
-                    // slice(20, 40) -> 返回 indices 20..39 (长度 20). 正确。
-                    const sliceStart = start - 1;
+                    const sliceStart = effectiveStart - 1;
                     const sliceEnd = end;
                     messages = context.chat.slice(sliceStart, sliceEnd);
                     Logger.info('ChatHistoryHelper', 'getChatHistory 调试信息', {

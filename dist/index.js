@@ -20784,10 +20784,10 @@ class Em {
       if (o != null && o.chat && Array.isArray(o.chat)) {
         let d = [];
         if (t) {
-          const [f, p] = t, g = f - 1, v = p;
-          d = o.chat.slice(g, v), H.info("ChatHistoryHelper", "getChatHistory 调试信息", {
+          const [f, p] = t, v = Math.max(1, f) - 1, b = p;
+          d = o.chat.slice(v, b), H.info("ChatHistoryHelper", "getChatHistory 调试信息", {
             inputRange: t,
-            calcSlice: [g, v],
+            calcSlice: [v, b],
             chatLen: o.chat.length,
             firstMsgSummary: ((a = (i = d[0]) == null ? void 0 : i.mes) == null ? void 0 : a.substring(0, 20)) || "undefined",
             firstMsgIndex: o.chat.indexOf(d[0])
