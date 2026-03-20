@@ -1,5 +1,5 @@
 import { BatchProgressCallback, BatchQueue, IBatchTaskHandler } from '../types';
-
+import { Logger } from '@/core/logger';
 /**
  * 核心调度引擎
  * 负责管理任务队列，并发锁，控制起停以及 UI 进度节流更新。
@@ -152,6 +152,13 @@ export class BatchEngine {
         try {
             // 步骤1：让业务方给出此次调度的预估任务切片名细
             const tasks = await handler.estimate();
+
+            // P0 Fix: 中断死锁保护。如果在 estimate 期间触发了 stop，直接放弃队列覆盖
+            if (this.stopSignal) {
+                Logger.info('BatchEngine', '收到中止信号，正在放弃估计出的新任务');
+                return;
+            }
+
             if (tasks.length === 0) {
                 // 没有要干的活
                 return;
@@ -194,11 +201,21 @@ export class BatchEngine {
                 });
             }
         } catch (error) {
-            console.error('[BatchEngine] 执行过程发生异常:', error);
+            Logger.error('BatchEngine', '执行过程发生异常:', error);
             // 将当前执行中的任务标记为 Error
             if (this.queue.tasks[this.queue.currentTaskIndex]) {
-                this.queue.tasks[this.queue.currentTaskIndex].status = 'error';
-                this.queue.tasks[this.queue.currentTaskIndex].error = error instanceof Error ? error.message : String(error);
+                const currentTask = this.queue.tasks[this.queue.currentTaskIndex];
+                currentTask.status = 'error';
+                currentTask.error = error instanceof Error ? error.message : String(error);
+                
+                // 显式捕获 Error cause 附加到日志，方便 Debug 追踪深层调用链
+                if (error instanceof Error) {
+                    Logger.error('BatchEngine', `[${currentTask.id}] 任务失败链路追踪:`, {
+                         message: error.message,
+                         stack: error.stack,
+                         cause: error.cause
+                    });
+                }
             }
         } finally {
             // P0 Fix: isRunning 仅在 finally 中释放，由正在运行的协程自己解锁

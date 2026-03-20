@@ -4,8 +4,61 @@
 import type { VectorConfig, VectorSource } from '@/config/types/rag';
 import { ModelAPIType, ModelInfo, ModelService } from '@/integrations/llm/ModelDiscovery';
 import { FormSection, SearchableSelectField, SelectField, TextField } from '@/ui/components/form/FormComponents';
-import { Loader2, RefreshCw } from 'lucide-react';
+import { AlertCircle, AlertTriangle, Loader2, RefreshCw } from 'lucide-react';
 import React, { useState } from 'react';
+
+
+/**
+ * 部署诊断组件 (针对 Failed to fetch 常见错误进行实时提示)
+ */
+const DeploymentDiagnostics: React.FC<{ url: string }> = ({ url }) => {
+    if (!url) return null;
+
+    const isHttpsPage = window.location.protocol === 'https:';
+    const isHttpUrl = url.startsWith('http:');
+    const isLocalhostUrl = url.includes('127.0.0.1') || url.includes('localhost');
+    const isLocalhostPage = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+    const alerts = [];
+
+    // 1. 混合内容拦截检测 (HTTPS -> HTTP)
+    if (isHttpsPage && isHttpUrl) {
+        alerts.push({
+            type: 'error',
+            icon: <AlertCircle size={14} className="text-destructive" />,
+            title: '混合内容屏蔽 (Mixed Content)',
+            content: '当前酒馆为 HTTPS 环境，无法直接请求 HTTP 接口。请配置 HTTPS 或使用 Nginx 同源代理。'
+        });
+    }
+
+    // 2. 本地回路检测 (远程访问填了 127.0.0.1)
+    if (isLocalhostUrl && !isLocalhostPage) {
+        alerts.push({
+            type: 'warning',
+            icon: <AlertTriangle size={14} className="text-warning" />,
+            title: '获取者身份冲突',
+            content: '127.0.0.1 指向的是你的电脑而非服务器。远程访问时请填写服务器的公网或局域网 IP。'
+        });
+    }
+
+    if (alerts.length === 0) return null;
+
+    return (
+        <div className="mt-2 space-y-2 animate-in fade-in slide-in-from-top-1 duration-200">
+            {alerts.map((alert, i) => (
+                <div key={i} className={`p-2 rounded border text-[10px] flex gap-2 ${
+                    alert.type === 'error' ? 'bg-destructive/10 border-destructive/20 text-destructive' : 'bg-warning/10 border-warning/20 text-warning'
+                }`}>
+                    <div className="mt-0.5 flex-shrink-0">{alert.icon}</div>
+                    <div className="flex-1">
+                        <div className="font-bold underline mb-0.5">{alert.title}</div>
+                        <div className="opacity-90 leading-tight">{alert.content}</div>
+                    </div>
+                </div>
+            ))}
+        </div>
+    );
+};
 
 
 interface VectorConfigFormProps {
@@ -182,6 +235,8 @@ export const VectorConfigForm: React.FC<VectorConfigFormProps> = ({
                                     : '输入 base URL (如 http://xxx/v1)，将自动添加 /embeddings 后缀'
                             }
                         </p>
+                        {/* 部署诊断组件 (针对 Failed to fetch 错误) */}
+                        <DeploymentDiagnostics url={config.apiUrl || ''} />
                     </div>
                 )}
 

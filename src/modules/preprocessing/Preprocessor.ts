@@ -19,7 +19,6 @@ import { DEFAULT_PREPROCESSING_CONFIG } from './types';
 
 
 // Helper functions to get context info safely
-// (Removed unused helpers)
 
 class Preprocessor {
     private static instance: Preprocessor;

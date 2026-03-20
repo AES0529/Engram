@@ -125,158 +125,153 @@ export function useDashboardData(refreshInterval = 2000): DashboardData & {
     // 获取 memoryStore 方法
     const getAllEntities = useMemoryStore(state => state.getAllEntities);
 
-    // 刷新数据
+    // Atomic fetchers
+    const fetchSystemHealth = useCallback(() => {
+        const stContext = getSTContext();
+        const summarizerStatus = summarizerService.getStatus();
+        const summarizerConfig = SettingsManager.get('summarizerConfig') || {};
+
+        if (!isMounted.current) return;
+        setSystem({
+            isConnected: !!stContext,
+            characterName: stContext?.name2 || 'Unknown',
+            currentFloor: summarizerStatus.currentFloor,
+            lastSummarizedFloor: summarizerStatus.lastSummarizedFloor,
+            pendingFloors: summarizerStatus.pendingFloors,
+            floorInterval: summarizerConfig.floorInterval || 10,
+            isSummarizing: summarizerStatus.isSummarizing,
+        });
+    }, []);
+
+    const fetchGlobalStats = useCallback(() => {
+        const currentStats = SettingsManager.get('statistics') || {
+            firstUseAt: null, activeDays: [], totalTokens: 0, totalLlmCalls: 0, totalEvents: 0, totalEntities: 0, totalRagInjections: 0
+        };
+        if (!isMounted.current) return;
+        setGlobalStats(currentStats as EngramSettings['statistics']);
+    }, []);
+
+    const fetchMemoryStats = useCallback(async () => {
+        const chatId = getCurrentChatId();
+        if (!chatId) return;
+
+        const dbModule = await import('@/data/db');
+        const db = dbModule.tryGetDbForChat(chatId);
+        if (!db) return;
+
+        const metaMod = await db.meta.get('lastModified');
+        const currentMod = (metaMod?.value as number) || 0;
+
+        if (currentMod !== lastDbModified.current || lastDbModified.current === 0) {
+            const eventCount = await db.events.count();
+            const entityCount = await db.entities.count();
+
+            // P1 Fix: 使用游标遍历进行类型统计，避免将整表读入内存
+            const entityByType: Record<string, number> = {};
+            // Using Table.each iteration to minimize memory allocations
+            await db.entities.each((entity) => {
+                const t = entity.type || 'unknown';
+                entityByType[t] = (entityByType[t] || 0) + 1;
+            });
+
+            const archivedCount = await db.events.filter(e => !!e.is_archived).count();
+
+            const sampleEvents = await db.events.limit(100).toArray();
+            const avgLen = sampleEvents.length > 0 
+                ? sampleEvents.reduce((s, e) => s + (e.summary?.length || 0), 0) / sampleEvents.length 
+                : 0;
+            const estimatedTokens = Math.ceil((avgLen * eventCount) / 4);
+
+            if (!isMounted.current) return;
+            setMemory({
+                eventCount,
+                entityCount,
+                entityByType,
+                archivedCount,
+                activeCount: eventCount - archivedCount,
+                estimatedTokens,
+            });
+            lastDbModified.current = currentMod;
+        }
+    }, []);
+
+    const fetchFeatureStatus = useCallback(async () => {
+        const defaults = getDefaultAPISettings();
+        const apiSettings = SettingsManager.get('apiSettings') || defaults;
+        const currentSummarizerConfig = SettingsManager.get('summarizerConfig') || {};
+        const entityConfig = apiSettings?.entityExtractConfig ?? defaults.entityExtractConfig;
+        const embeddingConfig = apiSettings?.embeddingConfig ?? defaults.embeddingConfig;
+        const recallConfig = apiSettings?.recallConfig ?? defaults.recallConfig;
+        const preprocessingConfig = SettingsManager.get('preprocessingConfig') as { enabled?: boolean } | undefined;
+
+        if (!isMounted.current) return;
+        setFeatures({
+            summarizer: currentSummarizerConfig.enabled !== false,
+            entity: !!entityConfig?.enabled,
+            embedding: !!embeddingConfig?.enabled,
+            recall: recallConfig?.enabled !== false,
+            preprocessing: !!preprocessingConfig?.enabled,
+        });
+    }, []);
+
+    const fetchBrainStats = useCallback(() => {
+        try {
+            const snapshot = brainRecallCache.getShortTermSnapshot();
+            const brainApiSettings = SettingsManager.get('apiSettings');
+            const brainConfig = brainApiSettings?.recallConfig?.brainRecall || DEFAULT_BRAIN_RECALL_CONFIG;
+
+            const workingItems = snapshot.filter(s => s.tier === 'working');
+            const topActiveItems = snapshot.slice(0, 3).map(s => ({
+                id: s.id,
+                label: s.label,
+                score: s.finalScore
+            }));
+
+            const contextText = MacroService.getSummaries();
+
+            if (!isMounted.current) return;
+            setBrainStats({
+                shortTermCount: snapshot.length,
+                shortTermLimit: brainConfig.shortTermLimit,
+                workingCount: workingItems.length,
+                workingLimit: brainConfig.workingLimit,
+                topItems: topActiveItems
+            });
+
+            setContextStats({
+                injectedLength: contextText.length,
+                estimatedTokens: Math.ceil(contextText.length / 4)
+            });
+
+        } catch (e) {
+            Logger.warn(LogModule.DASHBOARD, '加载 Brain Stats 失败', e);
+            if (isMounted.current) {
+                setBrainStats({
+                    shortTermCount: 0,
+                    shortTermLimit: 0,
+                    workingCount: 0,
+                    workingLimit: 0,
+                    topItems: []
+                });
+            }
+        }
+    }, []);
+
+    // 主刷新回调，编排原子获取函数
     const refresh = useCallback(async () => {
         try {
-            if (!isMounted.current) return;
-
-            // 1. System Health
-            const stContext = getSTContext();
-            const summarizerStatus = summarizerService.getStatus();
-            const summarizerConfig = SettingsManager.get('summarizerConfig') || {};
-
-            if (!isMounted.current) return;
-            setSystem({
-                isConnected: !!stContext,
-                characterName: stContext?.name2 || 'Unknown',
-                currentFloor: summarizerStatus.currentFloor,
-                lastSummarizedFloor: summarizerStatus.lastSummarizedFloor,
-                pendingFloors: summarizerStatus.pendingFloors,
-                floorInterval: summarizerConfig.floorInterval || 10,
-                isSummarizing: summarizerStatus.isSummarizing,
-            });
-
-            // 1.5 Global Statistics
-            // Use fallback if not found
-            const currentStats = SettingsManager.get('statistics') || {
-                firstUseAt: null, activeDays: [], totalTokens: 0, totalLlmCalls: 0, totalEvents: 0, totalEntities: 0, totalRagInjections: 0
-            };
-            if (!isMounted.current) return;
-            setGlobalStats(currentStats as EngramSettings['statistics']);
-
-            // 2. Memory Stats
-            // P1 Optimization: 只有在数据真正变化时才重新获取数据进行统计
-            const chatId = getCurrentChatId();
-            if (!chatId) return;
-
-            const dbModule = await import('@/data/db');
-            const db = dbModule.tryGetDbForChat(chatId);
-            if (!db) return;
-
-            const metaMod = await db.meta.get('lastModified');
-            const currentMod = (metaMod?.value as number) || 0;
-
-            if (currentMod !== lastDbModified.current || lastDbModified.current === 0) {
-                // 使用 count() 获取总数，避免拉取全表实体
-                const eventCount = await db.events.count();
-                const entityCount = await db.entities.count();
-
-                // TODO [P1 优化]: 对于类型分布，当实体规模超大时应使用 Dexie 聚合查询或索引
-                // 当前阶段实体规模有限，暂时保留 getAllEntities 统计类型分布
-                const entities = await getAllEntities(); 
-                const entityByType: Record<string, number> = {};
-                entities.forEach(e => {
-                    entityByType[e.type] = (entityByType[e.type] || 0) + 1;
-                });
-
-                // 获取活跃事件总数 (is_archived 为 true)
-                // P0 Fix: 回退至 filter 模式，规避部分环境对布尔索引键报错 (DataError)
-                const archivedCount = await db.events.filter(e => !!e.is_archived).count();
-
-                // 估算 Token：采样前 100 条估算平均值
-                const sampleEvents = await db.events.limit(100).toArray();
-                const avgLen = sampleEvents.length > 0 
-                    ? sampleEvents.reduce((s, e) => s + (e.summary?.length || 0), 0) / sampleEvents.length 
-                    : 0;
-                const estimatedTokens = Math.ceil((avgLen * eventCount) / 4);
-
-                if (!isMounted.current) return;
-                setMemory({
-                    eventCount,
-                    entityCount,
-                    entityByType,
-                    archivedCount,
-                    activeCount: eventCount - archivedCount,
-                    estimatedTokens,
-                });
-                lastDbModified.current = currentMod;
-            }
-
-            // 3. Feature Status
-            // P0 Fix: 使用 getDefaultAPISettings() 提供完整的 fallback，防止可选字段缺失导致显示为 false
-            const defaults = getDefaultAPISettings();
-            const apiSettings = SettingsManager.get('apiSettings') || defaults;
-            const entityConfig = apiSettings?.entityExtractConfig ?? defaults.entityExtractConfig;
-            const embeddingConfig = apiSettings?.embeddingConfig ?? defaults.embeddingConfig;
-            const recallConfig = apiSettings?.recallConfig ?? defaults.recallConfig;
-            const preprocessingConfig = SettingsManager.get('preprocessingConfig') as { enabled?: boolean } | undefined;
-
-            Logger.debug(LogModule.DASHBOARD, '同步 Feature Status', { 
-                summarizer: summarizerConfig.enabled, 
-                entity: entityConfig?.enabled,
-                recall: recallConfig?.enabled,
-                preprocessing: preprocessingConfig?.enabled
-            });
-
-            if (!isMounted.current) return;
-            setFeatures({
-                summarizer: summarizerConfig.enabled !== false, // 默认为开启
-                entity: !!entityConfig?.enabled,
-                embedding: !!embeddingConfig?.enabled,
-                recall: recallConfig?.enabled !== false,     // 默认为开启
-                preprocessing: !!preprocessingConfig?.enabled,
-            });
-
-            // 4. Brain & Context Stats
-            try {
-                const snapshot = brainRecallCache.getShortTermSnapshot();
-                // 直接从 SettingsManager 读取最新的配置
-                const brainApiSettings = SettingsManager.get('apiSettings');
-                const brainConfig = brainApiSettings?.recallConfig?.brainRecall || DEFAULT_BRAIN_RECALL_CONFIG;
-
-                // Get working memory items (Tier = 'working')
-                const workingItems = snapshot.filter(s => s.tier === 'working');
-                const topActiveItems = snapshot.slice(0, 3).map(s => ({
-                    id: s.id,
-                    label: s.label,
-                    score: s.finalScore
-                }));
-
-                const contextText = MacroService.getSummaries();
-
-                if (!isMounted.current) return;
-                setBrainStats({
-                    shortTermCount: snapshot.length,
-                    shortTermLimit: brainConfig.shortTermLimit,
-                    workingCount: workingItems.length,
-                    workingLimit: brainConfig.workingLimit,
-                    topItems: topActiveItems
-                });
-
-                setContextStats({
-                    injectedLength: contextText.length,
-                    estimatedTokens: Math.ceil(contextText.length / 4)
-                });
-
-            } catch (e) {
-                Logger.warn(LogModule.DASHBOARD, '加载 Brain Stats 失败', e);
-                if (isMounted.current) {
-                    setBrainStats({
-                        shortTermCount: 0,
-                        shortTermLimit: 0,
-                        workingCount: 0,
-                        workingLimit: 0,
-                        topItems: []
-                    });
-                }
-            }
+            fetchSystemHealth();
+            fetchGlobalStats();
+            await fetchMemoryStats();
+            await fetchFeatureStatus();
+            fetchBrainStats();
 
             if (isMounted.current) setIsLoading(false);
         } catch (error) {
             Logger.error(LogModule.DASHBOARD, '刷新 Dashboard 数据失败', { error });
             if (isMounted.current) setIsLoading(false);
         }
-    }, [getAllEntities]);
+    }, [fetchSystemHealth, fetchGlobalStats, fetchMemoryStats, fetchFeatureStatus, fetchBrainStats]);
 
     // 切换功能开关
     // P0 Fix: 副作用全部提取到 setFeatures 外部，保证 setState 更新器是纯函数

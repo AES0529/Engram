@@ -195,11 +195,9 @@ export class SaveEntity implements IStep {
         newEntities: EntityNode[],
         updatedEntities: EntityNode[]
     ): Promise<void> {
-        // 按实体名分组
         const patchesByEntity = new Map<string, z.infer<typeof PatchOpSchema>[]>();
 
         for (const patch of patches) {
-            // path 格式: /entities/{name} 或 /entities/{name}/profile/xxx
             const match = patch.path.match(/^\/entities\/([^/]+)/);
             if (!match) continue;
 
@@ -211,144 +209,171 @@ export class SaveEntity implements IStep {
         }
 
         for (const [entityName, entityPatches] of patchesByEntity) {
-            let existing = existingEntities.find(e =>
-                e.name === entityName || e.aliases?.includes(entityName)
-            );
+            let existing = this.resolveEntityIdentity(entityName, existingEntities);
 
-            // 检查是否有 add 到 /entities/{name} 的操作 (新实体)
-            const addRootPatch = entityPatches.find(p =>
-                p.op === 'add' && p.path === `/entities/${entityName}`
-            );
+            const addRootPatch = entityPatches.find(p => p.op === 'add' && p.path === `/entities/${entityName}`);
 
             if (addRootPatch) {
-                const lowerName = entityName.toLowerCase();
+                // 如果发现新实体声明，但名字发生冲突
                 const conflict = existingEntities.find(e =>
-                    e.name.toLowerCase() === lowerName || 
-                    e.aliases?.some(a => a.toLowerCase() === lowerName)
+                    e.name.toLowerCase() === entityName.toLowerCase() || 
+                    e.aliases?.some(a => a.toLowerCase() === entityName.toLowerCase())
                 );
 
                 if (!conflict) {
-                    // 真正的新实体
-                    const value = addRootPatch.value as any;
-                    const entity: any = {
-                        name: entityName,
-                        type: (value?.type as EntityType) || EntityType.Unknown,
-                        aliases: value?.aliases || [],
-                        profile: value?.profile || {},
-                        description: this.profileToYaml(entityName, value?.type || 'unknown', value?.profile || {})
-                    };
-
-                    if (!isDryRun) {
-                        const saved = await store.saveEntity(entity);
-                        newEntities.push(saved);
-                    } else {
-                        entity.id = `temp-${Date.now()}`;
-                        newEntities.push(entity);
-                    }
-                    // 标记为已处理，防止后续尝试作为更新处理 (因为由于是新创建，此时 existing 还是 null)
+                    await this.createNewEntity(entityName, addRootPatch.value, store, isDryRun, newEntities);
                     continue; 
                 } else {
-                    // 冲突，转为更新已有实体
                     existing = conflict;
                     Logger.debug('SaveEntity', `🔭 Duplicate entity detected for "${entityName}", redirecting to merge mode.`);
-                    
-                    // 将 add /entities/Name 的内容解构为对 conflict 的修改
-                    const value = addRootPatch.value as any;
-                    if (value && typeof value === 'object') {
-                        if (value.profile) entityPatches.push({ op: 'add', path: `/entities/${entityName}/profile`, value: value.profile });
-                        if (value.type) entityPatches.push({ op: 'replace', path: `/entities/${entityName}/type`, value: value.type });
-                        if (value.aliases) entityPatches.push({ op: 'add', path: `/entities/${entityName}/aliases`, value: value.aliases });
-                    }
+                    this.convertRootAddToPatches(entityName, addRootPatch.value, entityPatches);
                 }
             }
 
             if (existing) {
-                // 更新已有实体
-                try {
-                    const targetDoc = JSON.parse(JSON.stringify(existing));
-                    (targetDoc as any)._original = JSON.parse(JSON.stringify(existing));
-
-                    const relativeOps = [];
-                    for (const p of entityPatches) {
-                        const isRoot = p.path === `/entities/${entityName}`;
-                        if (isRoot && p.op === 'add') continue; // 已处理或无效
-
-                        if (isRoot && (p.op === 'replace' || p.op === 'test')) {
-                            if (p.value && typeof p.value === 'object') {
-                                const val = p.value as any;
-                                if (val.profile) relativeOps.push({ op: p.op, path: '/profile', value: val.profile });
-                                if (val.type) relativeOps.push({ op: p.op, path: '/type', value: val.type });
-                                if (val.aliases) relativeOps.push({ op: p.op, path: '/aliases', value: val.aliases });
-                            }
-                            continue;
-                        }
-
-                        if (!isRoot) {
-                            let relPath = p.path.replace(`/entities/${entityName}`, '');
-                            const parts = relPath.split('/').filter(Boolean);
-                            const GENERIC_KEYS = new Set(['profile', 'type', 'description', 'desc', 'value', 'name', 'id', 'status', 'features', 'traits']);
-                            
-                            let anchorKey = '';
-                            let anchorIndex = -1;
-                            for (let i = parts.length - 1; i >= 0; i--) {
-                                if (!GENERIC_KEYS.has(parts[i])) {
-                                    anchorKey = parts[i];
-                                    anchorIndex = i;
-                                    break;
-                                }
-                            }
-
-                            if (anchorKey) {
-                                const searchRoot = targetDoc.profile || {};
-                                const foundPaths = this.findUniquePath(searchRoot, anchorKey, '/profile');
-                                if (foundPaths.length === 1) {
-                                    const realAnchorPath = foundPaths[0];
-                                    const suffix = parts.slice(anchorIndex + 1).join('/');
-                                    const newPath = suffix ? `${realAnchorPath}/${suffix}` : realAnchorPath;
-                                    if (newPath !== relPath) {
-                                        Logger.debug('SaveEntity', `🔭 Smart Pointer Redirect: ${relPath} -> ${newPath}`);
-                                        relPath = newPath;
-                                    }
-                                }
-                            }
-
-                            relativeOps.push({ ...p, path: relPath });
-                        }
-                    }
-
-                    if (relativeOps.length > 0) {
-                        Logger.debug('SaveEntity', `Applying ${relativeOps.length} patches to ${entityName}`, { ops: relativeOps });
-                        jsonpatch.applyPatch(targetDoc, relativeOps as jsonpatch.Operation[]);
-                        if (!isDryRun) {
-                            const description = this.profileToYaml(targetDoc.name, targetDoc.type, targetDoc.profile || {});
-                            await store.updateEntity(existing.id, {
-                                profile: targetDoc.profile,
-                                aliases: targetDoc.aliases,
-                                description,
-                                name: targetDoc.name,
-                                type: targetDoc.type
-                            });
-                            updatedEntities.push(targetDoc);
-                        } else {
-                            const diffs = relativeOps.map(op => {
-                                let oldValue: any = undefined;
-                                try {
-                                    if (op.op === 'replace' || op.op === 'remove') {
-                                        oldValue = jsonpatch.getValueByPointer(existing!, op.path);
-                                    }
-                                } catch (e) { /* ignore */ }
-                                return { ...op, oldValue };
-                            });
-                            targetDoc.description = this.profileToYaml(targetDoc.name, targetDoc.type, targetDoc.profile || {});
-                            (targetDoc as any)._diff = diffs;
-                            updatedEntities.push(targetDoc);
-                        }
-                    }
-                } catch (e) {
-                    Logger.warn('SaveEntity', `Patch failed for ${entityName}`, e);
-                }
+                await this.applyMergePatches(entityName, existing, entityPatches, store, isDryRun, updatedEntities);
             }
         }
+    }
+
+    /** 消除别名歧义匹配 */
+    private resolveEntityIdentity(entityName: string, existingEntities: EntityNode[]): EntityNode | undefined {
+        // 1. 精确匹配名称优先
+        const exactMatch = existingEntities.find(e => e.name === entityName);
+        if (exactMatch) return exactMatch;
+
+        // 2. 别名匹配（可能冲突）
+        const aliasMatches = existingEntities.filter(e => e.aliases?.includes(entityName));
+        if (aliasMatches.length === 1) {
+            return aliasMatches[0];
+        } else if (aliasMatches.length > 1) {
+            Logger.warn('SaveEntity', `⚠️ Alias conflict detected for "${entityName}". Multiple entities share this alias. Falling back to first match to avoid crash, but data overwrite may occur.`, { matches: aliasMatches.map(e => e.name) });
+            return aliasMatches[0];
+        }
+        return undefined;
+    }
+
+    private async createNewEntity(entityName: string, value: any, store: ReturnType<typeof useMemoryStore.getState>, isDryRun: boolean, newEntities: EntityNode[]) {
+        const entity: any = {
+            name: entityName,
+            type: (value?.type as EntityType) || EntityType.Unknown,
+            aliases: value?.aliases || [],
+            profile: value?.profile || {},
+            description: this.profileToYaml(entityName, value?.type || 'unknown', value?.profile || {})
+        };
+
+        if (!isDryRun) {
+            const saved = await store.saveEntity(entity);
+            newEntities.push(saved);
+        } else {
+            entity.id = `temp-${Date.now()}`;
+            newEntities.push(entity);
+        }
+    }
+
+    private convertRootAddToPatches(entityName: string, value: any, entityPatches: any[]) {
+        if (value && typeof value === 'object') {
+            if (value.profile) entityPatches.push({ op: 'add', path: `/entities/${entityName}/profile`, value: value.profile });
+            if (value.type) entityPatches.push({ op: 'replace', path: `/entities/${entityName}/type`, value: value.type });
+            if (value.aliases) entityPatches.push({ op: 'add', path: `/entities/${entityName}/aliases`, value: value.aliases });
+        }
+    }
+
+    private async applyMergePatches(
+        entityName: string, 
+        existing: EntityNode, 
+        entityPatches: any[], 
+        store: ReturnType<typeof useMemoryStore.getState>, 
+        isDryRun: boolean, 
+        updatedEntities: EntityNode[]
+    ) {
+        try {
+            // P1 Fix: 使用 structuredClone 替代昂贵的 JSON 序列化
+            const targetDoc = structuredClone(existing) as any;
+            targetDoc._original = structuredClone(existing);
+
+            const relativeOps = this.buildRelativePatches(entityName, entityPatches, targetDoc);
+
+            if (relativeOps.length > 0) {
+                Logger.debug('SaveEntity', `Applying ${relativeOps.length} patches to ${entityName}`, { ops: relativeOps });
+                jsonpatch.applyPatch(targetDoc, relativeOps as jsonpatch.Operation[]);
+
+                if (!isDryRun) {
+                    const description = this.profileToYaml(targetDoc.name, targetDoc.type, targetDoc.profile || {});
+                    await store.updateEntity(existing.id, {
+                        profile: targetDoc.profile,
+                        aliases: targetDoc.aliases,
+                        description,
+                        name: targetDoc.name,
+                        type: targetDoc.type
+                    });
+                    updatedEntities.push(targetDoc);
+                } else {
+                    const diffs = relativeOps.map(op => {
+                        let oldValue: any = undefined;
+                        try {
+                            if (op.op === 'replace' || op.op === 'remove') oldValue = jsonpatch.getValueByPointer(existing, op.path);
+                        } catch (e) { /* ignore */ }
+                        return { ...op, oldValue };
+                    });
+                    targetDoc.description = this.profileToYaml(targetDoc.name, targetDoc.type, targetDoc.profile || {});
+                    targetDoc._diff = diffs;
+                    updatedEntities.push(targetDoc);
+                }
+            }
+        } catch (e) {
+            Logger.warn('SaveEntity', `Patch failed for ${entityName}`, e);
+        }
+    }
+
+    private buildRelativePatches(entityName: string, entityPatches: any[], targetDoc: any): any[] {
+        const relativeOps = [];
+        for (const p of entityPatches) {
+            const isRoot = p.path === `/entities/${entityName}`;
+            if (isRoot && p.op === 'add') continue; 
+
+            if (isRoot && (p.op === 'replace' || p.op === 'test')) {
+                if (p.value && typeof p.value === 'object') {
+                    const val = p.value as any;
+                    if (val.profile) relativeOps.push({ op: p.op, path: '/profile', value: val.profile });
+                    if (val.type) relativeOps.push({ op: p.op, path: '/type', value: val.type });
+                    if (val.aliases) relativeOps.push({ op: p.op, path: '/aliases', value: val.aliases });
+                }
+                continue;
+            }
+
+            if (!isRoot) {
+                let relPath = p.path.replace(`/entities/${entityName}`, '');
+                const parts = relPath.split('/').filter(Boolean);
+                const GENERIC_KEYS = new Set(['profile', 'type', 'description', 'desc', 'value', 'name', 'id', 'status', 'features', 'traits']);
+                
+                let anchorKey = '';
+                let anchorIndex = -1;
+                for (let i = parts.length - 1; i >= 0; i--) {
+                    if (!GENERIC_KEYS.has(parts[i])) {
+                        anchorKey = parts[i];
+                        anchorIndex = i;
+                        break;
+                    }
+                }
+
+                if (anchorKey) {
+                    const searchRoot = targetDoc.profile || {};
+                    const foundPaths = this.findUniquePath(searchRoot, anchorKey, '/profile');
+                    if (foundPaths.length === 1) {
+                        const realAnchorPath = foundPaths[0];
+                        const suffix = parts.slice(anchorIndex + 1).join('/');
+                        const newPath = suffix ? `${realAnchorPath}/${suffix}` : realAnchorPath;
+                        if (newPath !== relPath) {
+                            Logger.debug('SaveEntity', `🔭 Smart Pointer Redirect: ${relPath} -> ${newPath}`);
+                            relPath = newPath;
+                        }
+                    }
+                }
+                relativeOps.push({ ...p, path: relPath });
+            }
+        }
+        return relativeOps;
     }
 
     /** 向后兼容: 处理旧版 entities + patches 格式 */
@@ -387,6 +412,10 @@ export class SaveEntity implements IStep {
         // 2. Process Patches
         if (data.patches) {
             for (const patch of data.patches) {
+                if (!patch.name) {
+                    Logger.warn('SaveEntity', 'Skipping legacy patch due to missing name field', { patch });
+                    continue;
+                }
                 const target = existingEntities.find(e => e.name === patch.name || e.id === patch.name);
                 if (!target) continue;
 

@@ -3,7 +3,7 @@
  * V0.9.12
  */
 
-import { Play, Settings, Brain, HelpCircle } from 'lucide-react';
+import { Play, Settings, Brain, HelpCircle, Globe } from 'lucide-react';
 import type { DocCategory } from './types';
 
 // 懒加载 MDX 文档
@@ -11,6 +11,7 @@ import Intro from './intro.mdx';
 import GettingStarted from './getting-started.mdx';
 import Features from './features.mdx';
 import FAQ from './faq.mdx';
+import Deployment from './deployment.mdx';
 
 export const DOCS: DocCategory[] = [
     {
@@ -28,6 +29,14 @@ export const DOCS: DocCategory[] = [
         component: GettingStarted,
         keywords: ['配置', 'setup', '入门', 'start', 'api', 'embedding', 'rerank', 'preprocessing'],
         description: '按步骤完成模型接入、处理策略与运行验证',
+    },
+    {
+        id: 'deployment',
+        label: '云端部署',
+        icon: Globe,
+        component: Deployment,
+        keywords: ['部署', 'cloud', 'vps', 'nginx', 'https', 'fetch', 'error', 'failed', 'ip'],
+        description: 'VPS 云端部署排障：解决 Failed to fetch、HTTPS 混合内容与安全组策略',
     },
     {
         id: 'features',

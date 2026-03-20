@@ -24,7 +24,7 @@ import {
     Sparkles,
     Wand2
 } from 'lucide-react';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 
 interface DashboardProps {
     onNavigate?: (path: string) => void;
@@ -57,7 +57,10 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     const [logs, setLogs] = useState<LogEntry[]>([]);
     const { system, memory, features, brainStats, contextStats, globalStats, toggleFeature } = useDashboardData(2000);
 
+    const isMounted = useRef(true);
+
     useEffect(() => {
+        isMounted.current = true;
         setLogs(Logger.getLogs().slice(0, 4));
         
         // 日志节流逻辑：每 500ms 只更新一次 UI
@@ -69,23 +72,25 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
             
             if (!throttleTimer) {
                 throttleTimer = setTimeout(() => {
-                    setLogs(prev => {
-                        const combined = [...pendingLogs, ...prev];
-                        pendingLogs = [];
-                        return combined.slice(0, 4);
-                    });
+                    if (isMounted.current) {
+                        setLogs(prev => {
+                            const combined = [...pendingLogs, ...prev];
+                            pendingLogs = [];
+                            return combined.slice(0, 4);
+                        });
+                    }
                     throttleTimer = null;
                 }, 500);
             }
         });
 
         return () => {
+            isMounted.current = false;
             unsubscribe();
             if (throttleTimer) clearTimeout(throttleTimer);
-            // P3 Fix: 组件卸载前 flush 已积累的 pendingLogs
-            if (pendingLogs.length > 0) {
-                setLogs(prev => [...pendingLogs, ...prev].slice(0, 4));
-            }
+            // P0 Fix: 组件卸载前如果还能更新状态才 flush，并且如果已经卸载就跳过
+            // 但是实际上如果在卸载流程中，不应该再去 setState 了。由于 React 18 的 StrictMode 或正常卸载，
+            // unmount 时 setState 会报警告。所以既然已经是 unmount 了，UI 也看不到了，直接丢弃 pendingLogs 即可。
         };
     }, []);
 

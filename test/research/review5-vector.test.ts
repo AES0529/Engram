@@ -18,6 +18,13 @@ vi.mock('@/modules/rag/embedding/EmbeddingService', () => ({
 vi.mock('@/data/db', () => ({
     tryGetDbForChat: vi.fn().mockReturnValue({
         events: {
+            toCollection: () => ({
+                each: (cb: any) => {
+                    const data = [{ id: 'ev1', embedding: [1, 2, 3], summary: 'test' }];
+                    data.forEach(cb);
+                    return Promise.resolve();
+                }
+            }),
             filter: () => ({
                 toArray: () => Promise.resolve([
                     { id: 'ev1', embedding: [1, 2, 3], summary: 'test' }
