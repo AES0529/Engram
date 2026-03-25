@@ -17,8 +17,8 @@ export class HistoryTask implements IBatchTaskHandler {
     readonly type = 'history';
 
     constructor(
-        private startFloor: number = 1,
-        private endFloor?: number,
+        public startFloor: number = 1,
+        public endFloor?: number,
         private types?: BatchTaskType[]
     ) {
         // 越界保护

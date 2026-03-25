@@ -9,7 +9,7 @@ export { getSTContext, type STMessage } from "./context";
 // 从专门化的 Adapter 中导出方法
 export { hideMessageRange, injectMessage } from "../chat/chat";
 export {
-    callPopup, createTopBarButton, mountGlobalOverlay, setGlobalRenderer, setReactRenderer, toggleMainPanel
+    callPopup, createTopBarButton, mountGlobalOverlay, openMainPanel, setGlobalRenderer, setReactRenderer, toggleMainPanel
 } from "../ui/ui";
 
 /**

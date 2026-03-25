@@ -31,20 +31,16 @@ interface AppProps {
 }
 
 const App: React.FC<AppProps> = ({ onClose }) => {
-    const [activeTab, setActiveTab] = useState('dashboard');
+    const [activeTab, setActiveTab] = useState(() => SettingsManager.get('lastOpenedTab') || 'dashboard');
     const [showWelcome, setShowWelcome] = useState(false);
     const [isInitialized, setIsInitialized] = useState(false);
 
     // Deep Link Navigation Handler
     const handleNavigate = (path: string) => {
-        // e.g. "presets:prompt" -> activeTab="presets:prompt"
-        // The renderContent will split it.
-        // We might want to just set the raw string as activeTab if our logic supports it.
-        // Looking at renderContent, it splits activeTab. So we just set it directly.
-        // But we should strip leading slash just in case.
-        const cleanPath = path.replace(/^\//, '');
+        const cleanPath = path.replace(/^\//, '') || 'dashboard';
         console.debug('[Engram] Navigating to:', cleanPath);
         setActiveTab(cleanPath);
+        SettingsManager.set('lastOpenedTab', cleanPath);
     };
 
     // 检查是否首次安装 - 延迟读取确保 ST 设置已加载
@@ -68,7 +64,20 @@ const App: React.FC<AppProps> = ({ onClose }) => {
             console.debug('[Engram] 收到导航请求:', path);
             handleNavigate(path);
         });
-        return () => subscription.unsubscribe();
+
+        const handleWindowNavigate = (event: Event) => {
+            const path = (event as CustomEvent<string>).detail;
+            console.debug('[Engram] 收到窗口导航请求:', path);
+            if (path) {
+                handleNavigate(path);
+            }
+        };
+
+        window.addEventListener('engram:navigate', handleWindowNavigate as EventListener);
+        return () => {
+            subscription.unsubscribe();
+            window.removeEventListener('engram:navigate', handleWindowNavigate as EventListener);
+        };
     }, []);
 
     // V0.9.10: 启动时检测更新，弹 toastr 提示
@@ -106,26 +115,33 @@ const App: React.FC<AppProps> = ({ onClose }) => {
     }
 
     const renderContent = () => {
-        // 解析路径，支持 page:subtab 格式（如 devlog:model, presets:prompt）
-        const [page, subtab] = activeTab.split(':');
+        // 解析路径，支持 page:subtab[:detail] 格式（如 devlog:model, presets:prompt:macros）
+        const [page, ...subtabParts] = activeTab.split(':');
+        const subtab = subtabParts.join(':') || undefined;
 
         switch (page) {
             case 'dashboard':
-                return <Dashboard onNavigate={setActiveTab} />;
+                return <Dashboard onNavigate={handleNavigate} />;
             case 'presets':
-                return <APIPresets initialTab={subtab as 'model' | 'prompt' | 'regex' | 'worldbook'} />;
+                return (
+                    <APIPresets
+                        onNavigate={handleNavigate}
+                        initialTab={subtabParts[0] as 'model' | 'prompt' | 'regex' | 'worldbook' | undefined}
+                        initialTabPath={subtab}
+                    />
+                );
             case 'devlog':
                 return <DevLog initialTab={subtab as 'runtime' | 'model'} />;
             case 'settings':
                 return <Settings />;
             case 'memory':
-                return <MemoryStream />;
+                return <MemoryStream initialTab={subtab as 'list' | 'entities' | undefined} />;
             case 'processing':
-                return <ProcessingView onNavigate={setActiveTab} />;
+                return <ProcessingView onNavigate={handleNavigate} initialTab={subtab as 'summary' | 'vectorization' | 'recall' | 'entity' | 'batch' | undefined} />;
             case 'docs':
                 return <DocsView initialTab={subtab} />;  // V0.9.11
             default:
-                return <Dashboard />;
+                return <Dashboard onNavigate={handleNavigate} />;
         }
     };
 

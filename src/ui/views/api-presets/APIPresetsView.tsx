@@ -61,14 +61,32 @@ const TAB_INFO: Record<MainTabType, { title: string; subtitle: string }> = {
 interface APIPresetsProps {
     onNavigate?: (path: string) => void;
     initialTab?: MainTabType;
+    initialTabPath?: string;
 }
 
-export const APIPresets: React.FC<APIPresetsProps> = ({ initialTab }) => {
+const MAIN_TABS = ['model', 'prompt', 'regex', 'worldbook'] as const;
+const MODEL_SUB_TAB_IDS = ['llm', 'vector', 'rerank'] as const;
+const PROMPT_SUB_TAB_IDS = ['templates', 'macros'] as const;
+
+export const APIPresets: React.FC<APIPresetsProps> = ({ initialTab, initialTabPath }) => {
+    const [initialMainTab, initialNestedTab] = (initialTabPath || '').split(':');
+    const resolvedMainTab = MAIN_TABS.includes(initialMainTab as MainTabType)
+        ? initialMainTab as MainTabType
+        : (initialTab || 'model');
+
     // Tab 状态
-    const [mainTab, setMainTab] = useState<MainTabType>(initialTab || 'model');
+    const [mainTab, setMainTab] = useState<MainTabType>(resolvedMainTab);
     const currentInfo = TAB_INFO[mainTab];
-    const [modelSubTab, setModelSubTab] = useState<ModelSubTabType>('llm');
-    const [promptSubTab, setPromptSubTab] = useState<PromptSubTabType>('templates');  // V0.9.2
+    const [modelSubTab, setModelSubTab] = useState<ModelSubTabType>(
+        resolvedMainTab === 'model' && MODEL_SUB_TAB_IDS.includes(initialNestedTab as ModelSubTabType)
+            ? initialNestedTab as ModelSubTabType
+            : 'llm'
+    );
+    const [promptSubTab, setPromptSubTab] = useState<PromptSubTabType>(
+        resolvedMainTab === 'prompt' && PROMPT_SUB_TAB_IDS.includes(initialNestedTab as PromptSubTabType)
+            ? initialNestedTab as PromptSubTabType
+            : 'templates'
+    );  // V0.9.2
     // const [worldbookSubTab, setWorldbookSubTab] = useState<WorldbookSubTabType>('global');
     // const [editingProfileId, setEditingProfileId] = useState<string | null>(null);
 
@@ -86,6 +104,27 @@ export const APIPresets: React.FC<APIPresetsProps> = ({ initialTab }) => {
             setShowMobileForm(false);
         }
     }, [isMobile]);
+
+    useEffect(() => {
+        const [nextMainTab, nextNestedTab] = (initialTabPath || '').split(':');
+        const resolvedNextMainTab = MAIN_TABS.includes(nextMainTab as MainTabType)
+            ? nextMainTab as MainTabType
+            : initialTab;
+
+        if (!resolvedNextMainTab) {
+            return;
+        }
+
+        setMainTab(resolvedNextMainTab);
+
+        if (resolvedNextMainTab === 'model' && MODEL_SUB_TAB_IDS.includes(nextNestedTab as ModelSubTabType)) {
+            setModelSubTab(nextNestedTab as ModelSubTabType);
+        }
+
+        if (resolvedNextMainTab === 'prompt' && PROMPT_SUB_TAB_IDS.includes(nextNestedTab as PromptSubTabType)) {
+            setPromptSubTab(nextNestedTab as PromptSubTabType);
+        }
+    }, [initialTab, initialTabPath]);
 
     // 使用 Hook 管理业务状态
     // 使用组合 Hooks 管理业务状态

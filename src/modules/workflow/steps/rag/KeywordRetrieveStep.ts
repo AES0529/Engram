@@ -2,7 +2,7 @@ import { SettingsManager } from '@/config/settings';
 import { Logger, LogModule } from '@/core/logger';
 import { tryGetDbForChat } from '@/data/db';
 import { getCurrentChatId } from '@/integrations/tavern';
-import { scanEntities, scanEvents } from '@/modules/memory/EntityScanner';
+import { matchEvent, scanEntities } from '@/modules/memory/EntityScanner';
 import { ScoredEvent } from '@/modules/rag/retrieval/HybridScorer';
 import { JobContext } from '../../core/JobContext';
 import { IStep } from '../../core/Step';
@@ -54,13 +54,13 @@ export class KeywordRetrieveStep implements IStep {
             }
         } catch (err) {
             Logger.warn(MODULE, '无法检查归档事件状态，默认尝试扫描', err);
-            hasArchivedEvents = true; 
+            hasArchivedEvents = true;
         }
 
         // 1. 获取全量数据进行缓存 (P1 Fix: 内存优化，只拉取一次)
         const allEntities = await db.entities.toArray();
         const entityIndex = allEntities.map(e => ({ id: e.id, name: e.name, aliases: e.aliases }));
-        
+
         // 预构建实体名 -> 实体 Map 以便快速查找 (缓存给后续多跳联想使用)
         const entryMap = new Map<string, any>();
         for (const e of allEntities) {
@@ -92,12 +92,12 @@ export class KeywordRetrieveStep implements IStep {
         if (recallConfig?.enableEntityKeyword !== false) {
             // 首先通过索引进行初步过滤
             const matchedIndex = scanEntities(textToScan, entityIndex as any).slice(0, entityTopK);
-            
+
             if (matchedIndex.length > 0) {
                 // P1 Fix: 从已有的 allEntities 缓存中获取，避免再次 bulkGet
                 const matchedIds = new Set(matchedIndex.map(e => e.id));
                 hitEntities = allEntities.filter(e => matchedIds.has(e.id));
-                
+
                 Logger.debug(LogModule.RAG_INJECT, `命中了 ${hitEntities.length} 个实体(TopK=${entityTopK}): ${hitEntities.map(e => e.name).join(', ')}`);
             }
         } else {
@@ -107,19 +107,34 @@ export class KeywordRetrieveStep implements IStep {
         // 事件仅在配置开启且有归档事件时扫描 (P0 Fix: 守卫下沉)
         if (recallConfig?.useKeywordRecall !== false && recallConfig?.enableEventKeyword !== false) {
             if (hasArchivedEvents) {
-                // P1 Fix: 使用流式读取扫描事件，避免 toArray() OOM
-                const scannerResults: any[] = [];
+                const scannedCount = { total: 0, archived: 0, matched: 0 };
                 await db.events.toCollection().each(event => {
-                    // 此处为了性能，可以预先简单过滤 textToScan
-                    // 暂时保留 scanEvents 逻辑，但通过流式喂入
-                    // 注意：scanEvents 目前是处理数组。我们需要调整下。
-                    // 为了保持最小变动且解决 toArray 压力，我们分批或流式筛选
-                    scannerResults.push(event);
+                    scannedCount.total += 1;
+
+                    if (!event.is_archived) {
+                        return;
+                    }
+
+                    scannedCount.archived += 1;
+
+                    if (!matchEvent(textToScan, event)) {
+                        return;
+                    }
+
+                    scannedCount.matched += 1;
+
+                    if (hitEvents.length < eventTopK) {
+                        hitEvents.push(event);
+                    }
                 });
-                hitEvents = scanEvents(textToScan, scannerResults).slice(0, eventTopK);
-                if (hitEvents.length > 0) {
-                    Logger.debug(LogModule.RAG_INJECT, `命中了 ${hitEvents.length} 条事件(TopK=${eventTopK})`);
-                }
+
+                Logger.debug(LogModule.RAG_INJECT, '事件关键词扫描完成', {
+                    eventTopK,
+                    scannedTotal: scannedCount.total,
+                    scannedArchived: scannedCount.archived,
+                    matched: scannedCount.matched,
+                    kept: hitEvents.length,
+                });
             } else {
                 Logger.info(LogModule.RAG_INJECT, '事件关键词扫描跳过：当前无归档事件');
             }

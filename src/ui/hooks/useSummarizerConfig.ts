@@ -5,7 +5,8 @@
  */
 import { useState, useCallback, useEffect } from 'react';
 import { SettingsManager } from "@/config/settings";
-import { DEFAULT_TRIM_CONFIG, type TrimConfig } from '@/modules/memory/EventTrimmer';
+import { DEFAULT_TRIM_CONFIG } from '@/config/types/defaults';
+import type { TrimConfig } from '@/config/types/memory';
 
 // 兼容旧的 Summarizer Config 接口
 interface SummarizerSettings {
@@ -95,10 +96,9 @@ export function useSummarizerConfig(): UseSummarizerConfigReturn {
             // 2. 保存 Trim Config 到 SettingsManager
             SettingsManager.setSummarizerSettings({ trimConfig });
 
-            // 3. 更新 EventTrimmer if needed (usually it reads from settings or gets updated via service)
-            // 这里我们显式更新一下，确保一致性
+            // 3. 同步运行态 EventTrimmer，避免自动触发仍使用旧阈值
             const { eventTrimmer } = await import('@/modules/memory/EventTrimmer');
-            eventTrimmer.updateConfig({ enabled: trimConfig.enabled });
+            eventTrimmer.updateConfig(trimConfig);
 
             setHasChanges(false);
         } catch (e) {

@@ -450,16 +450,34 @@ class SummarizerService {
                 const { eventTrimmer } = await import('@/modules/memory/EventTrimmer');
                 const trimStatus = await eventTrimmer.getStatus();
                 const trimConfig = eventTrimmer.getConfig();
+                const trimAvailability = await eventTrimmer.canTrim();
 
-                // 只有在精简已启用且触发条件满足时才自动执行
-                if (trimConfig.enabled && trimStatus.triggered) {
+                this.log('debug', '自动精简触发检查', {
+                    enabled: trimConfig.enabled,
+                    triggerType: trimStatus.triggerType,
+                    currentValue: trimStatus.currentValue,
+                    threshold: trimStatus.threshold,
+                    pendingEntryCount: trimStatus.pendingEntryCount,
+                    canTrim: trimAvailability.canTrim,
+                });
+
+                // 只有在精简已启用、达到阈值且存在足够待合并事件时才自动执行
+                if (trimConfig.enabled && trimStatus.triggered && trimAvailability.canTrim) {
                     this.log('info', '联动触发精简', {
                         triggerType: trimStatus.triggerType,
                         currentValue: trimStatus.currentValue,
-                        threshold: trimStatus.threshold
+                        threshold: trimStatus.threshold,
+                        pendingEntryCount: trimStatus.pendingEntryCount,
                     });
                     // 使用 manual=false 表示自动触发
                     await eventTrimmer.trim(false);
+                } else {
+                    this.log('debug', '跳过自动精简', {
+                        enabled: trimConfig.enabled,
+                        triggered: trimStatus.triggered,
+                        canTrim: trimAvailability.canTrim,
+                        pendingEntryCount: trimStatus.pendingEntryCount,
+                    });
                 }
             } catch (trimError) {
                 // 精简失败不应影响总结结果

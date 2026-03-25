@@ -93,6 +93,7 @@ export class ImportTextTask implements IBatchTaskHandler {
                                     tokenUsage: 0
                                 },
                                 input: {
+                                    isImport: true, // 增加标识放在 input 里
                                     // 模拟 range，用于 SaveEvent 记录 source_range
                                     range: [i, i]
                                 }
@@ -142,14 +143,19 @@ export class ImportTextTask implements IBatchTaskHandler {
                     },
                     {
                         input: {
+                            isImport: true, // 增加标识放在 input 里
                             range: [i, i]
                         },
                         parsedData: {
                             events: [
                                 {
                                     summary: chunk,
-                                    type: 'chat',
-                                    importance: 0,
+                                    time_anchor: new Date().toISOString(),
+                                    role: ['(import)'],
+                                    location: ['(import)'],
+                                    event: '(import)',
+                                    logic: [],
+                                    causality: ''
                                 }
                             ]
                         }

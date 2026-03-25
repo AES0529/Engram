@@ -85,6 +85,30 @@ export function scanEntities(text: string, entities: EntityNode[]): EntityNode[]
     return hitEntities;
 }
 
+export function matchEvent(text: string, event: EventNode): boolean {
+    if (!text || !event) return false;
+
+    // 扫描角色
+    if (Array.isArray(event.structured_kv.role)) {
+        for (const role of event.structured_kv.role) {
+            if (matchKey(text, role)) {
+                return true;
+            }
+        }
+    }
+
+    // 扫描地点
+    if (Array.isArray(event.structured_kv.location)) {
+        for (const loc of event.structured_kv.location) {
+            if (matchKey(text, loc)) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 /**
  * 扫描上下文中提及的事件（基于角色和地点）
  */
@@ -92,29 +116,7 @@ export function scanEvents(text: string, events: EventNode[]): EventNode[] {
     const hitEvents: EventNode[] = [];
 
     for (const event of events) {
-        let hit = false;
-
-        // 扫描角色
-        if (Array.isArray(event.structured_kv.role)) {
-            for (const role of event.structured_kv.role) {
-                if (matchKey(text, role)) {
-                    hit = true;
-                    break;
-                }
-            }
-        }
-
-        // 扫描地点
-        if (!hit && Array.isArray(event.structured_kv.location)) {
-            for (const loc of event.structured_kv.location) {
-                if (matchKey(text, loc)) {
-                    hit = true;
-                    break;
-                }
-            }
-        }
-
-        if (hit) {
+        if (matchEvent(text, event)) {
             hitEvents.push(event);
         }
     }

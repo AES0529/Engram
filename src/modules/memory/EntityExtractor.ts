@@ -224,7 +224,7 @@ export class EntityBuilder {
             // 获取聊天历史 (如果是单条楼层，则宏系统会自动处理)
             const chatHistory = MacroService.getChatHistory(range || [floor, floor]);
 
-            // 231: Watchdog / Cancel Signal
+            // 231: Cancel Signal
             const signal = { cancelled: false };
 
             // 显示运行中通知 (支持取消)
@@ -308,22 +308,6 @@ export class EntityBuilder {
 
             Logger.error(LogModule.MEMORY_ENTITY, '实体提取异常', { error: errorMsg });
 
-            // P0 Fix: watchdog 超时/失败时，防止 last_extracted_floor 指针卡死导致自动提取死循环
-            // 策略：只在【自动触发】且携带 range 时，进行防御性推进（推进到 range[1]）
-            // - 手动触发不推进，避免吞掉问题
-            // - dryRun 不推进，避免预览影响状态
-            try {
-                const isWatchdogTimeout = e instanceof Error && /Watchdog/.test(e.message);
-                if (!manual && !dryRun && range && isWatchdogTimeout) {
-                    await chatManager.updateState({ last_extracted_floor: range[1] });
-                    Logger.warn(LogModule.MEMORY_ENTITY, 'Watchdog 超时：已防御性推进 last_extracted_floor，避免自动提取死循环', {
-                        last_extracted_floor: range[1],
-                        range,
-                    });
-                }
-            } catch (stateErr) {
-                Logger.warn(LogModule.MEMORY_ENTITY, 'Watchdog 超时后的状态补偿失败', { error: stateErr });
-            }
 
             if (manual) {
                 notificationService.error(`实体提取异常: ${errorMsg}`, 'Engram 错误');

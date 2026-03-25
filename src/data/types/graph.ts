@@ -145,6 +145,7 @@ export interface EntityNode {
      * 约定字段:
      * - relations: EntityRelation[] (用于多跳检索)
      * - identity: string (核心身份)
+     * - description: string (在剧情中的简短定位)
      * - tags: string[] (特征标签)
      */
     profile: Record<string, unknown>;

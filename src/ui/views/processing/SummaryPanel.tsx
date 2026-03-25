@@ -7,11 +7,10 @@
  * - 状态项按重要性区分字体大小
  * - 去卡片化，使用细线分割
  */
-import type { TrimTriggerType } from '@/config/types/memory';
+import type { TrimConfig, TrimTriggerType } from '@/config/types/memory';
 import { AlertCircle, Calculator, CheckCircle2, Hash, Pause, Play, RefreshCw, Scissors } from 'lucide-react';
 import React, { useEffect, useState } from 'react';
 // import { TrimmerConfig, DEFAULT_TRIMMER_CONFIG } from '@/services/summarizer/TrimmerService'; // V0.7 Deprecated
-import { type TrimConfig } from '@/modules/memory/EventTrimmer';
 
 import type { TrimmerStatus } from "@/modules/memory";
 import { SliderField } from '@/ui/components/core/SliderField';

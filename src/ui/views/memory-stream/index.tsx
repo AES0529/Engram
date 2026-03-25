@@ -30,8 +30,12 @@ const TAB_INFO = {
     entities: { title: '实体列表', subtitle: '查看和管理提取的实体' },
 };
 
-export const MemoryStream: React.FC = () => {
-    const ms = useMemoryStream();
+interface MemoryStreamProps {
+    initialTab?: 'list' | 'entities';
+}
+
+export const MemoryStream: React.FC<MemoryStreamProps> = ({ initialTab }) => {
+    const ms = useMemoryStream(initialTab);
     const editorRef = useRef<EventEditorHandle>(null);
 
     const currentInfo = TAB_INFO[ms.viewTab];

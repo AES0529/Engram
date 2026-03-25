@@ -61,17 +61,8 @@ export class VectorRetrieveStep implements IStep {
             return;
         }
 
-        // P1 Fix: 使用流式读取或更轻量的过滤。此处暂时先读取有向量的事件，后面可以考虑游标过滤
-        // 注意：Dexie 的 filter 是内存操作，toArray 才会拉取。这里如果是大量事件，toArray 依然有压力。
-        // 改为流式处理计算相似度时再收集。
-        const events: any[] = [];
-        await db.events
-            .toCollection()
-            .each(e => {
-                if (e.embedding && e.embedding.length > 0) {
-                    events.push(e);
-                }
-            });
+        const threshold = config.embedding?.minScoreThreshold ?? 0.3;
+        const topK = config.embedding?.topK || 20;
 
         // 获取查询的嵌入向量
         let queryVector: number[];
@@ -92,11 +83,11 @@ export class VectorRetrieveStep implements IStep {
             // V1.0.3: 优先使用 unifiedQueries 第一条，否则使用 userInput
             const isFallbackFromChat = !unifiedQueries || unifiedQueries.length === 0;
             const rawQuery = !isFallbackFromChat ? unifiedQueries![0] : query;
-            
+
             // P2 Fix: 使用字符级安全的截断方式，防止 Emoji/多字节字符截断损坏
             const maxLength = isFallbackFromChat ? 300 : 500;
-            const searchQuery = Array.from(rawQuery).length > maxLength 
-                ? Array.from(rawQuery).slice(0, maxLength).join('') + "..." 
+            const searchQuery = Array.from(rawQuery).length > maxLength
+                ? Array.from(rawQuery).slice(0, maxLength).join('') + "..."
                 : rawQuery;
 
             if (Array.from(rawQuery).length > maxLength) {
@@ -114,36 +105,62 @@ export class VectorRetrieveStep implements IStep {
             throw e;
         }
 
-        // 计算相似度
+        // 计算相似度（流式维护 TopK，避免全量事件入内存）
         const candidates: ScoredEvent[] = [];
-        for (const event of events) {
-            if (event.embedding && event.embedding.length > 0) {
-                const similarity = embeddingService.cosineSimilarity(queryVector, event.embedding);
-                const threshold = config.embedding?.minScoreThreshold ?? 0.3;
-                if (similarity >= threshold) {
-                    candidates.push({
-                        id: event.id,
-                        summary: event.summary,
-                        embeddingScore: similarity,
-                        node: event,
-                    });
-                }
+        let scannedEvents = 0;
+        let embeddedEvents = 0;
+        let matchedEvents = 0;
+
+        await db.events.toCollection().each(event => {
+            scannedEvents += 1;
+
+            if (!event.embedding || event.embedding.length === 0) {
+                return;
             }
-        }
 
-        // 按相似度降序排序
-        const sortedCandidates = candidates.sort((a, b) => (b.embeddingScore || 0) - (a.embeddingScore || 0));
+            embeddedEvents += 1;
 
-        // 截取 Top K (在 HybridPipeline 中可以稍微多取一点供 Rerank，但这里为了保持一致先按配置)
-        // 注意：hybridSearch 原始逻辑中如果后续有 rerank 会传给 rerank，因此多保留些可能是好的。
-        // 但原始代码直接 slice(0, topK)。我们沿用它。
-        const topK = config.embedding?.topK || 20;
-        context.data.candidates = sortedCandidates.slice(0, topK);
+            const similarity = embeddingService.cosineSimilarity(queryVector, event.embedding);
+            if (similarity < threshold) {
+                return;
+            }
+
+            matchedEvents += 1;
+            const candidate: ScoredEvent = {
+                id: event.id,
+                summary: event.summary,
+                embeddingScore: similarity,
+                node: event,
+            };
+
+            if (candidates.length < topK) {
+                candidates.push(candidate);
+                candidates.sort((a, b) => (b.embeddingScore || 0) - (a.embeddingScore || 0));
+                return;
+            }
+
+            const tailScore = candidates[candidates.length - 1]?.embeddingScore || 0;
+            if (similarity <= tailScore) {
+                return;
+            }
+
+            candidates[candidates.length - 1] = candidate;
+            candidates.sort((a, b) => (b.embeddingScore || 0) - (a.embeddingScore || 0));
+        });
+
+        context.data.candidates = candidates;
         context.data.embeddingTime = Date.now() - startTime; // New field
         context.data.vectorRetrieveTime = context.data.embeddingTime; // Keep for backward compatibility if needed
         context.data.vectorConfig = config.embedding; // New field
         context.data.recallConfig = config;
 
-        Logger.debug(LogModule.RAG_INJECT, `向量检索完成，得到 ${context.data.candidates.length} 个候选`);
+        Logger.debug(LogModule.RAG_INJECT, '向量检索完成', {
+            candidateCount: context.data.candidates.length,
+            scannedEvents,
+            embeddedEvents,
+            matchedEvents,
+            topK,
+            threshold,
+        });
     }
 }

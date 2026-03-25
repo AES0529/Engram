@@ -36,6 +36,8 @@ class BatchProcessor {
 
             // 返回兼容旧 API 的格式给 UI
             return {
+                startFloor: task.startFloor,
+                endFloor: task.endFloor,
                 summaryTasks: previewTasks.find(t => t.type === 'summary')?.progress.total || 0,
                 entityTasks: previewTasks.find(t => t.type === 'entity')?.progress.total || 0,
                 trimTasks: previewTasks.find(t => t.type === 'trim')?.progress.total || 0,

@@ -226,21 +226,43 @@ export function createTopBarButton(): void {
 }
 
 /**
+ * 打开主面板（若已打开则不重复创建）
+ */
+export function openMainPanel(): void {
+    if (panelVisible && panelElement) {
+        return;
+    }
+
+    panelElement = createMainPanel();
+    document.body.appendChild(panelElement);
+    panelVisible = true;
+}
+
+/**
+ * 关闭主面板
+ */
+export function closeMainPanel(): void {
+    if (!panelVisible || !panelElement) {
+        return;
+    }
+
+    if (reactRoot) {
+        reactRoot.unmount();
+        reactRoot = null;
+    }
+    panelElement.remove();
+    panelElement = null;
+    panelVisible = false;
+}
+
+/**
  * 切换主面板显示
  */
 export function toggleMainPanel(): void {
     if (panelVisible && panelElement) {
-        if (reactRoot) {
-            reactRoot.unmount();
-            reactRoot = null;
-        }
-        panelElement.remove();
-        panelElement = null;
-        panelVisible = false;
+        closeMainPanel();
     } else {
-        panelElement = createMainPanel();
-        document.body.appendChild(panelElement);
-        panelVisible = true;
+        openMainPanel();
     }
 }
 

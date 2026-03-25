@@ -11,6 +11,7 @@ export interface EngramSettings {
     promptTemplates: PromptTemplate[]; // 提示词模板列表
     hasSeenWelcome: boolean; // 是否已观看欢迎动画
     lastReadVersion: string; // 最后已读的版本号
+    lastOpenedTab: string; // 上次打开的主界面页面
     summarizerConfig: Partial<any>; // 总结器配置 (Legacy)
     trimmerConfig: Partial<any>; // 精简器配置
     regexRules: RegexRule[]; // 正则清洗规则列表
@@ -51,6 +52,7 @@ const defaultSettings: EngramSettings = Object.freeze({
     promptTemplates: [],
     hasSeenWelcome: false,
     lastReadVersion: '0.0.0',
+    lastOpenedTab: 'dashboard',
     summarizerConfig: {},
     trimmerConfig: {},
     regexRules: [],

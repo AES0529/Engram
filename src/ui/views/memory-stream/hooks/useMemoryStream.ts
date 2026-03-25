@@ -22,7 +22,7 @@ export interface GroupedEvent {
     startIndex: number;
 }
 
-export function useMemoryStream() {
+export function useMemoryStream(initialTab: ViewTab = 'list') {
     // === 1. 基础状态 ===
     const [events, setEvents] = useState<EventNode[]>([]);
     const [entities, setEntities] = useState<EntityNode[]>([]);
@@ -31,7 +31,7 @@ export function useMemoryStream() {
 
     // === 2. UI 交互状态 ===
     const [viewMode, setViewMode] = useState<ViewMode>('browse');
-    const [viewTab, setViewTab] = useState<ViewTab>('list');
+    const [viewTab, setViewTab] = useState<ViewTab>(initialTab);
     const [selectedId, setSelectedId] = useState<string | null>(null);
     const [checkedIds, setCheckedIds] = useState<Set<string>>(new Set());
 
@@ -284,7 +284,7 @@ export function useMemoryStream() {
             ]);
 
             notificationService.success(`成功保存变更`, 'MemoryStream');
-            
+
             // 刷新数据
             await loadEvents();
             await loadEntities();

@@ -217,24 +217,10 @@ class LLMAdapter {
         customApiConfig?: Record<string, any>
     ): Promise<LLMResponse> {
         // =========================================================================
-        // Context Aggregation Gateway (V0.8 Upgrade)
+        // Prompt Pre-processing (V1.0 Fix)
         // =========================================================================
-        const combinedPrompt = request.systemPrompt ?
-            `${request.systemPrompt}\n\n${request.userPrompt}` :
-            request.userPrompt;
-
-        const generateData = {
-            prompt: combinedPrompt,
-            body: {
-                messages: [
-                    { role: 'system', content: request.systemPrompt },
-                    { role: 'user', content: request.userPrompt }
-                ]
-            },
-        };
-
-        let finalSystemPrompt = request.systemPrompt;
-        let finalUserPrompt = request.userPrompt;
+        let finalSystemPrompt = request.systemPrompt || '';
+        let finalUserPrompt = request.userPrompt || '';
 
         // Engram Pipeline (RegexProcessor)
         // Fix P1: 移除导致循环依赖的 @/modules/workflow/steps 导入，改为直接导入
@@ -262,14 +248,17 @@ class LLMAdapter {
 
         if (helper.generateRaw) {
             const prompts: any[] = [];
+            
+            // 严格遵循：System -> User 顺序
             if (finalSystemPrompt) {
                 prompts.push({ role: 'system', content: finalSystemPrompt });
             }
-            // 在指定位置插入内置的 user_input
-            prompts.push('user_input');
+            
+            // 直接将用户内容作为 user 角色推入，不再使用 'user_input' 占位符
+            // 这样酒馆就不会在末尾自动追加多余的内容
+            prompts.push({ role: 'user', content: finalUserPrompt });
 
             content = await helper.generateRaw({
-                user_input: finalUserPrompt,
                 ordered_prompts: prompts,
                 custom_api: customApiConfig,
                 ...generationOptions,

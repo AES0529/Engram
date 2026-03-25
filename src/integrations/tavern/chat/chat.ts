@@ -10,26 +10,38 @@ const MODULE = 'TavernChat';
  */
 export async function hideMessageRange(start: number, end: number): Promise<void> {
     try {
-        const importPath = '/scripts/chats.js';
-        const scriptPath = '/script.js';
-
-        const chatsModule = await import(/* @vite-ignore */ importPath);
-        const scriptModule = await import(/* @vite-ignore */ scriptPath);
-
-        if (chatsModule && typeof chatsModule.hideChatMessageRange === 'function') {
-            await chatsModule.hideChatMessageRange(start, end, false); // unhide=false -> hide
-
-            if (scriptModule && typeof scriptModule.saveChat === 'function') {
-                await scriptModule.saveChat();
-                Logger.debug(MODULE, `Chat saved after hiding range: ${start}-${end}`);
-            } else {
-                Logger.warn(MODULE, 'saveChat not found in script.js');
-            }
-
-            Logger.debug(MODULE, `Hidden messages range: ${start}-${end}`);
+        const command = `/hide start=${start} end=${end}`;
+        
+        // 优先使用官方扩展支持的斜杠指令触发器（高兼容性）
+        // @ts-ignore
+        if (typeof window.TavernHelper?.triggerSlash === 'function') {
+            // @ts-ignore
+            window.TavernHelper.triggerSlash(command);
+            Logger.debug(MODULE, `Slash command execution: ${command}`);
         } else {
-            Logger.warn(MODULE, 'hideChatMessageRange not found in chats.js');
+            // 降级：如果不可用，尝试兼容之前的做法
+            Logger.warn(MODULE, 'TavernHelper.triggerSlash is unavailable. Executing fallback hiding.');
+            const importPath = '/scripts/chats.js';
+            const chatsModule = await import(/* @vite-ignore */ importPath);
+            if (chatsModule && typeof chatsModule.hideChatMessageRange === 'function') {
+                await chatsModule.hideChatMessageRange(start, end, false);
+            }
         }
+
+        // 统一在执行隐藏后尝试强制保存聊天状态，避免刷新后隐藏失效（SillyTavern 的常见坑）
+        setTimeout(async () => {
+            try {
+                const scriptPath = '/script.js';
+                const scriptModule = await import(/* @vite-ignore */ scriptPath);
+                if (scriptModule && typeof scriptModule.saveChat === 'function') {
+                    await scriptModule.saveChat();
+                    Logger.debug(MODULE, `Chat explicitly saved after hiding range: ${start}-${end}`);
+                }
+            } catch (e) {
+                Logger.warn(MODULE, 'Failed to explicitly save chat after hiding.', e);
+            }
+        }, 800);
+
     } catch (e) {
         Logger.error(MODULE, 'Failed to hide messages:', e);
     }

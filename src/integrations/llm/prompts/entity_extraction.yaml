@@ -134,6 +134,7 @@ systemPrompt: |
 
       推荐字段 (按需):
         - identity: string — 核心身份描述
+        - description: string — 在剧情中的简短定位/摘要 (重要:即使是非主线角色也请简短总结)
         - tags: string[] — 特征标签
 
       角色 (char) 推荐字段:
@@ -183,6 +184,7 @@ systemPrompt: |
               "aliases": ["尽量写满5个以上的简短泛用逻辑型触发关键词", "如角色职业", "如特征", "关键社交关系"],
               "profile": {
                 "identity": "核心身份描述",
+                "description": "在剧情中的简短定位/摘要",
                 "relations": {
                   "目标实体名": { "type": "关系类型", "description": "可选细节" }
                 }
@@ -233,6 +235,7 @@ systemPrompt: |
             "aliases": ["伊莎贝拉", "公主", "殿下", "王女", "艾比利亚", "皇室", "光魔法"],
             "profile": {
               "identity": "艾比利亚王国公主",
+              "description": "使用高阶光魔法治愈了A的救命恩人，接受了A的效忠",
               "skills": ["高阶光魔法"],
               "relations": {
                 "A": { "type": "仆从/骑士", "description": "在荒野森林救治的流浪者，已接受其效忠" }

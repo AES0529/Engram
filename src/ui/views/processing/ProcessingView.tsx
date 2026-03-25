@@ -4,7 +4,7 @@
  * 只负责框架和 Tab 切换，具体业务逻辑在子组件中
  * 类似 APIPresetsView 的架构设计
  */
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { FileText, Database, Layers, Network, ScrollText, BookOpen, Search, Save } from 'lucide-react';
 import { Tab } from "@/ui/components/layout/TabPills";
 import { LayoutTabs } from "@/ui/components/layout/LayoutTabs";
@@ -39,6 +39,7 @@ const QUICK_LINKS: QuickLink[] = [
 
 interface ProcessingViewProps {
     onNavigate?: (path: string) => void;
+    initialTab?: ProcessingTab;
 }
 
 interface TabInfo {

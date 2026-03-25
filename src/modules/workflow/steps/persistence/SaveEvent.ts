@@ -109,8 +109,11 @@ export class SaveEvent implements IStep {
         context.output = savedEvents;
 
         // 4. 后置操作
+        // 如果是外部导入，则不影响主线聊天记录的游标更新
+        const isImport = context.input?.isImport === true;
+
         // Update last summarized floor (State)
-        if (range[1] > 0) {
+        if (range[1] > 0 && !isImport) {
             await store.setLastSummarizedFloor(range[1]);
         }
 
@@ -119,7 +122,8 @@ export class SaveEvent implements IStep {
 
         // 5. Auto Hide (Optional) - Should this be a separate step?
         // 放在这里方便，或者放在 Workflow 的最后
-        if (context.config.autoHide && range[1] > 0) {
+        // 在新规范下，如果是导入操作，我们完全不应该去隐藏哪怕一条所谓的 "消息楼层"，因为它可能根本不存在于当期聊天
+        if (context.config.autoHide && range[1] > 0 && !isImport) {
             const startIndex = range[0] - 1;
             const endIndex = range[1] - 1;
             hideMessageRange(startIndex, endIndex).catch(e => {

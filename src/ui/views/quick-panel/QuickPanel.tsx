@@ -16,13 +16,14 @@
  */
 
 import { SettingsManager } from '@/config/settings';
+import { NAV_ITEMS } from '@/constants/navigation';
 import { Logger } from '@/core/logger';
 import { preprocessor } from '@/modules/preprocessing';
 import type { PreprocessingConfig } from '@/modules/preprocessing/types';
 import { DEFAULT_PREPROCESSING_CONFIG } from '@/modules/preprocessing/types';
 import { Switch } from '@/ui/components/core/Switch';
 import { FloatingPanel } from '@/ui/components/overlay/FloatingPanel';
-import { AlertCircle, BrainCircuit, Clapperboard, Paintbrush, Search, Wand2, type LucideIcon } from 'lucide-react';
+import { AlertCircle, BrainCircuit, Clapperboard, FileCog, FolderOpen, Paintbrush, Search, Settings2, Wand2, type LucideIcon } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 interface QuickPanelProps {
@@ -30,7 +31,19 @@ interface QuickPanelProps {
     onClose: () => void;
 }
 
+const NAV_QUICK_LINKS = [
+    { id: 'memory-list', label: '记忆列表', description: '事件流与编辑', icon: FolderOpen, path: 'memory:list' },
+    { id: 'memory-entities', label: '实体列表', description: '实体管理视图', icon: BrainCircuit, path: 'memory:entities' },
+    { id: 'processing-summary', label: '摘要配置', description: '总结与精简参数', icon: FileCog, path: 'processing:summary' },
+    { id: 'processing-recall', label: '召回配置', description: 'RAG 检索参数', icon: Search, path: 'processing:recall' },
+    { id: 'presets-model', label: '模型配置', description: 'LLM / 向量 / Rerank', icon: FileCog, path: 'presets:model:llm' },
+    { id: 'presets-prompt', label: '提示词模板', description: '模板与自定义宏', icon: Wand2, path: 'presets:prompt:templates' },
+    { id: 'devlog-model', label: '模型日志', description: '查看 LLM 通信记录', icon: Clapperboard, path: 'devlog:model' },
+    { id: 'settings', label: '全局设置', description: '外观与全局选项', icon: Settings2, path: 'settings' },
+] as const;
+
 export function QuickPanel({ isOpen, onClose }: QuickPanelProps) {
+    const [panelTab, setPanelTab] = useState<'preprocess' | 'navigate'>('preprocess');
     const [config, setConfig] = useState<PreprocessingConfig>(
         preprocessor.getConfig() || DEFAULT_PREPROCESSING_CONFIG
     );
@@ -138,6 +151,29 @@ export function QuickPanel({ isOpen, onClose }: QuickPanelProps) {
         }
     }, [config]);
 
+    const handleNavigate = useCallback((path: string) => {
+        import('@/integrations/tavern').then(({ openMainPanel }) => {
+            openMainPanel();
+        }).finally(() => {
+            window.setTimeout(() => {
+                window.dispatchEvent(new CustomEvent('engram:navigate', { detail: path }));
+            }, 0);
+            onClose();
+        });
+    }, [onClose]);
+
+    const quickNavItems = useMemo(() => {
+        const primaryItems = NAV_ITEMS.filter(item => item.id !== 'dashboard').map(item => ({
+            id: item.id,
+            label: item.label,
+            description: '打开对应主页面',
+            icon: item.icon,
+            path: item.path.replace(/^\//, ''),
+        }));
+
+        return [...NAV_QUICK_LINKS, ...primaryItems.filter(item => !NAV_QUICK_LINKS.some(link => link.path === item.path))];
+    }, []);
+
     // 如果当前选中的模板不在可用列表中（除了默认或未设置），给个提示
     const isCurrentTemplateValid = !config.templateId || availableModes.some(m => m.id === config.templateId);
 
@@ -149,129 +185,177 @@ export function QuickPanel({ isOpen, onClose }: QuickPanelProps) {
             width={300}
         >
             <div className="space-y-3">
-                {/* 预处理开关 */}
-                <div
-                    className="flex items-center justify-between p-2 rounded-md"
-                    style={{
-                        backgroundColor: 'var(--surface, rgba(255,255,255,0.05))',
-                        border: '1px solid var(--border, rgba(255,255,255,0.1))',
-                    }}
-                >
-                    <div className="flex items-center gap-2">
-                        <Search size={14} style={{ color: 'var(--primary, #ef7357)' }} />
-                        <span className="text-sm font-medium">输入预处理</span>
-                    </div>
-                    <Switch
-                        checked={recallConfig?.usePreprocessing ?? config.enabled}
-                        onChange={handleToggle}
-                    />
+                <div className="grid grid-cols-2 gap-2">
+                    <button
+                        onClick={() => setPanelTab('preprocess')}
+                        className={`rounded-md px-3 py-2 text-sm transition-colors ${panelTab === 'preprocess' ? 'bg-primary/15 text-primary border border-primary/40' : 'bg-muted/30 text-muted-foreground border border-border'}`}
+                    >
+                        预处理
+                    </button>
+                    <button
+                        onClick={() => setPanelTab('navigate')}
+                        className={`rounded-md px-3 py-2 text-sm transition-colors ${panelTab === 'navigate' ? 'bg-primary/15 text-primary border border-primary/40' : 'bg-muted/30 text-muted-foreground border border-border'}`}
+                    >
+                        导航
+                    </button>
                 </div>
 
-                {/* 预览开关 */}
-                {(recallConfig?.usePreprocessing ?? config.enabled) && (
-                    <div
-                        className="flex items-center justify-between p-2 rounded-md"
-                        style={{
-                            backgroundColor: 'var(--surface, rgba(255,255,255,0.05))',
-                            border: '1px solid var(--border, rgba(255,255,255,0.1))',
-                        }}
-                    >
-                        <div className="flex items-center gap-2 pl-2">
-                            <span className="text-xs text-muted-foreground">预览修订</span>
-                        </div>
-                        <Switch
-                            checked={config.preview}
-                            onChange={() => {
-                                const newConfig = { ...config, preview: !config.preview };
-                                setConfig(newConfig);
-                                import('@/config/settings').then(({ SettingsManager }) => {
-                                    SettingsManager.set('preprocessingConfig', newConfig);
-                                });
+                {panelTab === 'preprocess' && (
+                    <>
+                        <div
+                            className="flex items-center justify-between p-2 rounded-md"
+                            style={{
+                                backgroundColor: 'var(--surface, rgba(255,255,255,0.05))',
+                                border: '1px solid var(--border, rgba(255,255,255,0.1))',
                             }}
-                        />
-                    </div>
-                )}
-
-                {/* 模式选择 */}
-                {(recallConfig?.usePreprocessing ?? config.enabled) && (
-                    <div className="space-y-2">
-                        <div className="text-xs px-1" style={{ color: 'var(--muted-foreground, #888)' }}>
-                            预处理模式
+                        >
+                            <div className="flex items-center gap-2">
+                                <Search size={14} style={{ color: 'var(--primary, #ef7357)' }} />
+                                <span className="text-sm font-medium">输入预处理</span>
+                            </div>
+                            <Switch
+                                checked={recallConfig?.usePreprocessing ?? config.enabled}
+                                onChange={handleToggle}
+                            />
                         </div>
 
-                        {availableModes.length === 0 ? (
+                        {(recallConfig?.usePreprocessing ?? config.enabled) && (
                             <div
-                                className="flex items-start gap-2 p-2 rounded-md text-xs mt-2"
+                                className="flex items-center justify-between p-2 rounded-md"
                                 style={{
-                                    backgroundColor: 'rgba(var(--primary-rgb, 239,115,87), 0.1)',
-                                    border: '1px solid rgba(var(--primary-rgb, 239,115,87), 0.3)',
-                                    color: 'var(--muted-foreground, #888)',
+                                    backgroundColor: 'var(--surface, rgba(255,255,255,0.05))',
+                                    border: '1px solid var(--border, rgba(255,255,255,0.1))',
                                 }}
                             >
-                                <AlertCircle size={14} style={{ color: 'var(--primary, #ef7357)', flexShrink: 0, marginTop: 2 }} />
-                                <span>
-                                    暂无预处理模板。请前往 API 配置 → 提示词模板中创建 'preprocessing' 类别的模板。
-                                </span>
-                            </div>
-                        ) : (
-                            <div className="space-y-1 max-h-48 overflow-y-auto custom-scrollbar pr-1">
-                                {availableModes.map((mode) => {
-                                    const Icon = mode.icon;
-                                    const isSelected = config.templateId === mode.id;
-                                    return (
-                                        <button
-                                            key={mode.id}
-                                            onClick={() => handleModeChange(mode.id)}
-                                            className="w-full flex items-center gap-3 p-2 rounded-md transition-all text-left"
-                                            style={{
-                                                backgroundColor: isSelected
-                                                    ? 'rgba(var(--primary-rgb, 239,115,87), 0.15)'
-                                                    : 'var(--surface, rgba(255,255,255,0.05))',
-                                                border: isSelected
-                                                    ? '1px solid var(--primary, #ef7357)'
-                                                    : '1px solid var(--border, rgba(255,255,255,0.1))',
-                                                color: 'var(--foreground, #fff)',
-                                            }}
-                                        >
-                                            <Icon
-                                                size={16}
-                                                style={{
-                                                    color: isSelected
-                                                        ? 'var(--primary, #ef7357)'
-                                                        : 'var(--muted-foreground, #888)'
-                                                }}
-                                            />
-                                            <div className="flex-1 min-w-0">
-                                                <div className="text-sm font-medium truncate">{mode.name}</div>
-                                                <div
-                                                    className="text-xs truncate"
-                                                    style={{ color: 'var(--muted-foreground, #888)' }}
-                                                >
-                                                    {mode.description}
-                                                </div>
-                                            </div>
-                                        </button>
-                                    );
-                                })}
+                                <div className="flex items-center gap-2 pl-2">
+                                    <span className="text-xs text-muted-foreground">预览修订</span>
+                                </div>
+                                <Switch
+                                    checked={config.preview}
+                                    onChange={() => {
+                                        const newConfig = { ...config, preview: !config.preview };
+                                        setConfig(newConfig);
+                                        import('@/config/settings').then(({ SettingsManager }) => {
+                                            SettingsManager.set('preprocessingConfig', newConfig);
+                                        });
+                                    }}
+                                />
                             </div>
                         )}
-                    </div>
+
+                        {(recallConfig?.usePreprocessing ?? config.enabled) && (
+                            <div className="space-y-2">
+                                <div className="text-xs px-1" style={{ color: 'var(--muted-foreground, #888)' }}>
+                                    预处理模式
+                                </div>
+
+                                {availableModes.length === 0 ? (
+                                    <div
+                                        className="flex items-start gap-2 p-2 rounded-md text-xs mt-2"
+                                        style={{
+                                            backgroundColor: 'rgba(var(--primary-rgb, 239,115,87), 0.1)',
+                                            border: '1px solid rgba(var(--primary-rgb, 239,115,87), 0.3)',
+                                            color: 'var(--muted-foreground, #888)',
+                                        }}
+                                    >
+                                        <AlertCircle size={14} style={{ color: 'var(--primary, #ef7357)', flexShrink: 0, marginTop: 2 }} />
+                                        <span>
+                                            暂无预处理模板。请前往 API 配置 → 提示词模板中创建 'preprocessing' 类别的模板。
+                                        </span>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-1 max-h-48 overflow-y-auto custom-scrollbar pr-1">
+                                        {availableModes.map((mode) => {
+                                            const Icon = mode.icon;
+                                            const isSelected = config.templateId === mode.id;
+                                            return (
+                                                <button
+                                                    key={mode.id}
+                                                    onClick={() => handleModeChange(mode.id)}
+                                                    className="w-full flex items-center gap-3 p-2 rounded-md transition-all text-left"
+                                                    style={{
+                                                        backgroundColor: isSelected
+                                                            ? 'rgba(var(--primary-rgb, 239,115,87), 0.15)'
+                                                            : 'var(--surface, rgba(255,255,255,0.05))',
+                                                        border: isSelected
+                                                            ? '1px solid var(--primary, #ef7357)'
+                                                            : '1px solid var(--border, rgba(255,255,255,0.1))',
+                                                        color: 'var(--foreground, #fff)',
+                                                    }}
+                                                >
+                                                    <Icon
+                                                        size={16}
+                                                        style={{
+                                                            color: isSelected
+                                                                ? 'var(--primary, #ef7357)'
+                                                                : 'var(--muted-foreground, #888)'
+                                                        }}
+                                                    />
+                                                    <div className="flex-1 min-w-0">
+                                                        <div className="text-sm font-medium truncate">{mode.name}</div>
+                                                        <div
+                                                            className="text-xs truncate"
+                                                            style={{ color: 'var(--muted-foreground, #888)' }}
+                                                        >
+                                                            {mode.description}
+                                                        </div>
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        <div
+                            className="text-xs text-center pt-2"
+                            style={{
+                                borderTop: '1px solid var(--border, rgba(255,255,255,0.1))',
+                                color: 'var(--muted-foreground, #888)',
+                            }}
+                        >
+                            {(recallConfig?.usePreprocessing ?? config.enabled)
+                                ? availableModes.find(m => m.id === config.templateId)?.name
+                                    ? `已启用 · ${availableModes.find(m => m.id === config.templateId)?.name}`
+                                    : '已启用 · 未知模板'
+                                : '预处理已禁用'}
+                        </div>
+                    </>
                 )}
 
-                {/* 状态指示 */}
-                <div
-                    className="text-xs text-center pt-2"
-                    style={{
-                        borderTop: '1px solid var(--border, rgba(255,255,255,0.1))',
-                        color: 'var(--muted-foreground, #888)',
-                    }}
-                >
-                    {(recallConfig?.usePreprocessing ?? config.enabled)
-                        ? availableModes.find(m => m.id === config.templateId)?.name
-                            ? `已启用 · ${availableModes.find(m => m.id === config.templateId)?.name}`
-                            : '已启用 · 未知模板'
-                        : '预处理已禁用'}
-                </div>
+                {panelTab === 'navigate' && (
+                    <div className="space-y-2">
+                        <div className="text-xs px-1 text-muted-foreground">快捷跳转</div>
+                        <div className="space-y-1 max-h-72 overflow-y-auto custom-scrollbar pr-1">
+                            {quickNavItems.map((item) => {
+                                const Icon = item.icon;
+                                return (
+                                    <button
+                                        key={item.id}
+                                        onClick={() => handleNavigate(item.path)}
+                                        className="w-full flex items-center gap-3 p-2 rounded-md transition-all text-left bg-muted/30 border border-border hover:border-primary/40 hover:bg-primary/5"
+                                    >
+                                        <Icon size={16} className="text-primary shrink-0" />
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-sm font-medium truncate">{item.label}</div>
+                                            <div className="text-xs text-muted-foreground truncate">{item.description}</div>
+                                        </div>
+                                    </button>
+                                );
+                            })}
+                        </div>
+                        <div
+                            className="text-xs text-center pt-2"
+                            style={{
+                                borderTop: '1px solid var(--border, rgba(255,255,255,0.1))',
+                                color: 'var(--muted-foreground, #888)',
+                            }}
+                        >
+                            支持记住主页面与部分子标签路径
+                        </div>
+                    </div>
+                )}
             </div>
         </FloatingPanel>
     );

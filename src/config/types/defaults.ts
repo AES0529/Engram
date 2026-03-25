@@ -100,9 +100,6 @@ export const DEFAULT_ENTITY_CONFIG: EntityExtractConfig = {
     keepRecentCount: 5,
     autoArchive: true,      // V1.4.2 默认开启归档管家
     archiveLimit: 50,      // 默认上限 50
-
-    // P0 Fix: 实体提取 watchdog 默认 180s，避免本地模型慢导致 60s 超时死循环
-    watchdogTimeoutMs: 180_000,
 };
 
 const DEFAULT_REGEX_CONFIG: GlobalRegexConfig = {
@@ -127,7 +124,7 @@ const DEFAULT_WORLDBOOK_CONFIG: WorldbookConfig = {
     enableEJS: true, // V0.8 默认启用 EJS
 };
 
-const DEFAULT_TRIM_CONFIG: TrimConfig = {
+export const DEFAULT_TRIM_CONFIG: TrimConfig = {
     enabled: false,
     trigger: 'token',
     tokenLimit: 4096,

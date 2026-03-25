@@ -201,23 +201,26 @@ export const createEntitySlice: StateCreator<any, [], [], EntityState> = (set, g
         if (!db) return '';
 
         try {
-            let entities: EntityNode[] = [];
+            let fullEntities: EntityNode[] = [];
+            let summaryEntities: EntityNode[] = [];
 
             const all = await db.entities.toArray();
-            // 归档名单应该始终包含所有已归档实体，用于防重提醒
-            const archivedEntities = all.filter(e => e.is_archived);
 
             if (ids && ids.length > 0) {
-                // 情况 A: 召回模式
-                // 召回的项（哪怕是已归档的）显示详细画像
-                entities = all.filter(e => ids.includes(e.id));
+                // 情况 A: 有召回 ID 列表
+                // 详细展示：活跃实体 + 被召回的归档实体
+                // 简略展示：未被召回的归档实体
+                fullEntities = all.filter(e => !e.is_archived || ids.includes(e.id));
+                summaryEntities = all.filter(e => e.is_archived && !ids.includes(e.id));
             } else {
-                // 情况 B: 全局模式
-                // 仅显示未归档的活跃实体画像
-                entities = all.filter(e => !e.is_archived);
+                // 情况 B: 无召回 ID 列表
+                // 详细展示：所有活跃实体
+                // 简略展示：所有归档实体
+                fullEntities = all.filter(e => !e.is_archived);
+                summaryEntities = all.filter(e => e.is_archived);
             }
 
-            if (entities.length === 0 && archivedEntities.length === 0) return '';
+            if (fullEntities.length === 0 && summaryEntities.length === 0) return '';
 
             const groups: Record<string, EntityNode[]> = {
                 char: [],
@@ -227,7 +230,7 @@ export const createEntitySlice: StateCreator<any, [], [], EntityState> = (set, g
                 unknown: [],
             };
 
-            for (const entity of entities) {
+            for (const entity of fullEntities) {
                 const typeKey = entity.type || 'unknown';
                 if (groups[typeKey]) {
                     groups[typeKey].push(entity);
@@ -245,6 +248,7 @@ export const createEntitySlice: StateCreator<any, [], [], EntityState> = (set, g
             };
 
             const sections: string[] = [];
+
             for (const [typeKey, entityList] of Object.entries(groups)) {
                 if (entityList.length === 0) continue;
 
@@ -256,10 +260,18 @@ export const createEntitySlice: StateCreator<any, [], [], EntityState> = (set, g
                 sections.push(`<${tag}>\n${contents}\n</${tag}>`);
             }
 
-            // 补充已归档实体（仅提供名字作为上下文，防止模型重复创建）
-            if (archivedEntities.length > 0) {
-                const archivedNames = archivedEntities.map(e => e.name).join(', ');
-                sections.push(`<archived_entities>\n以下实体已存在但目前处于非活跃状态，请勿重复创建: ${archivedNames}\n</archived_entities>`);
+            // 补充未登场/未召回的已归档实体（仅提供极简特征作为防遗忘和防重提醒）
+            if (summaryEntities.length > 0) {
+                const yamlLines = ['<archived_entities>', '以下实体目前未出场，但需要你保持对其设定的认知，请勿重复创建新实体:'];
+                for (const e of summaryEntities) {
+                    const identity = e.profile?.identity ?? '未知身份';
+                    const description = e.profile?.description ?? '无具体备注';
+                    yamlLines.push(`${e.name}:`);
+                    yamlLines.push(`  identity: ${identity}`);
+                    yamlLines.push(`  description: ${description}`);
+                }
+                yamlLines.push('</archived_entities>');
+                sections.push(yamlLines.join('\n'));
             }
 
             return sections.join('\n\n');
