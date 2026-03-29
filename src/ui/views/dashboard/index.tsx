@@ -24,7 +24,7 @@ import {
     Sparkles,
     Wand2
 } from 'lucide-react';
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 interface DashboardProps {
     onNavigate?: (path: string) => void;
@@ -62,14 +62,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
     useEffect(() => {
         isMounted.current = true;
         setLogs(Logger.getLogs().slice(0, 4));
-        
+
         // 日志节流逻辑：每 500ms 只更新一次 UI
         let pendingLogs: LogEntry[] = [];
         let throttleTimer: NodeJS.Timeout | null = null;
 
         const unsubscribe = Logger.subscribe((newLog) => {
             pendingLogs.unshift(newLog);
-            
+
             if (!throttleTimer) {
                 throttleTimer = setTimeout(() => {
                     if (isMounted.current) {
@@ -131,11 +131,13 @@ export const Dashboard: React.FC<DashboardProps> = ({ onNavigate }) => {
                         <div>
                             <h2 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-4">系统状态</h2>
                             <div className="grid grid-cols-2 gap-6">
-                                <div>
+                                <div className="min-w-0">
                                     <span className="text-xs text-muted-foreground block mb-1">连接状态</span>
-                                    <div className={`flex items-center gap-2 text-lg font-medium ${system.isConnected ? 'text-emphasis' : 'text-muted-foreground'}`}>
-                                        {system.isConnected ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
-                                        {system.isConnected ? system.characterName : '未连接'}
+                                    <div className={`flex items-center gap-2 text-lg font-medium min-w-0 ${system.isConnected ? 'text-emphasis' : 'text-muted-foreground'}`}>
+                                        {system.isConnected ? <CheckCircle2 size={18} className="shrink-0" /> : <AlertCircle size={18} className="shrink-0" />}
+                                        <span className="truncate max-w-[120px] block" title={system.isConnected ? system.characterName : '未连接'}>
+                                            {system.isConnected ? system.characterName : '未连接'}
+                                        </span>
                                     </div>
                                 </div>
                                 <div>

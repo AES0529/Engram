@@ -378,7 +378,9 @@ class SummarizerService {
                 [startFloor, endFloor] = rangeOverride;
             } else {
                 startFloor = this._lastSummarizedFloor + 1;
-                const buffer = this.config.bufferSize || 0;
+                const buffer = Math.max(0, this.config.bufferSize || 0);
+                const interval = Math.max(1, this.config.floorInterval || 10);
+                const pendingFloors = Math.max(0, currentFloor - this._lastSummarizedFloor);
                 const maxProcessableFloor = currentFloor - buffer;
 
                 if (startFloor > maxProcessableFloor) {
@@ -388,15 +390,36 @@ class SummarizerService {
                     return null;
                 }
 
-                const interval = this.config.floorInterval || 10;
-                const proposedEndFloor = startFloor + interval - 1;
-                endFloor = Math.min(maxProcessableFloor, proposedEndFloor);
+                // 稳定策略：无论自动还是手动触发，只要没有显式传入 rangeOverride，
+                // 默认都按「楼层间隔 - 缓冲层」处理一个固定窗口，避免手动触发时把所有未处理楼层一次性吞掉。
+                const targetProcessCount = Math.max(1, interval - buffer);
+                const availableProcessCount = Math.max(0, maxProcessableFloor - startFloor + 1);
+                const processCount = Math.min(targetProcessCount, availableProcessCount, pendingFloors);
+
+                if (processCount <= 0) {
+                    if (manual) {
+                        notificationService.info('暂无足够的新内容需要总结 (缓冲期内)', 'Engram');
+                    }
+                    return null;
+                }
+
+                endFloor = startFloor + processCount - 1;
             }
 
             if (startFloor > endFloor) return null;
 
             const range: [number, number] = [startFloor, endFloor];
-            this.log('info', '准备总结', { range });
+            this.log('info', '准备总结', {
+                range,
+                currentFloor,
+                lastSummarizedFloor: this._lastSummarizedFloor,
+                floorInterval: this.config.floorInterval,
+                bufferSize: this.config.bufferSize,
+                maxProcessableFloor: rangeOverride ? endFloor : currentFloor - (this.config.bufferSize || 0),
+                autoHide: this.config.autoHide,
+                manual,
+                rangeOverride: rangeOverride ?? null,
+            });
 
             // 2. Run Workflow
             const { WorkflowEngine } = await import('@/modules/workflow/core/WorkflowEngine');

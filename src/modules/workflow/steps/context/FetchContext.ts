@@ -1,6 +1,5 @@
 import { Logger } from '@/core/logger';
-import { getCurrentCharacter, getCurrentChat } from '@/integrations/tavern';
-import { MacroService } from '@/integrations/tavern';
+import { getCurrentCharacter, getCurrentChat, MacroService } from '@/integrations/tavern';
 import { WorldInfoService } from '@/integrations/tavern/worldbook';
 import { JobContext } from '../../core/JobContext';
 import { IStep } from '../../core/Step';
@@ -32,15 +31,20 @@ export class FetchContext implements IStep {
         // 优先使用任务输入中传入的明确范围 (range)，常用于批处理切片执行。
         // 如果未传入 range，则回退到 MacroService 的默认逻辑（通常是获取最近的 N 条消息）。
         const range = context.input.range as [number, number] | undefined;
-        Logger.debug('FetchContext', `开始获取聊天记录，指定范围: ${range ? range.join('-') : '默认最近'}`);
+        Logger.debug('FetchContext', '开始获取聊天记录', {
+            range: range ?? null,
+            trigger: context.trigger,
+            workflowId: context.id,
+            currentStep: context.metadata.currentStep,
+        });
 
         // 调用 History 助手获取格式化后的文本
         const history = MacroService.getChatHistory(range);
-        
+
         // 关键修复：确保 context.input.chatHistory 始终有值（即使为空字符串），
         // 这样 BuildPrompt 步骤就能正确通过 split/join 逻辑替换掉 {{chatHistory}} 占位符。
         context.input.chatHistory = history || '';
-        
+
         if (!history) {
             Logger.warn('FetchContext', '未获取到任何聊天记录，这可能导致提示词中出现空上下文');
         }

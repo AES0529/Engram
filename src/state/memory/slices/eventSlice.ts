@@ -152,7 +152,8 @@ export const createEventSlice: StateCreator<any, [], [], EventState> = (set, get
             const events = await db.events.toArray();
             if (events.length === 0) return { totalTokens: 0, eventCount: 0, activeEventCount: 0 };
 
-            const activeEvents = events.filter(e => !e.is_archived);
+            // Trim 触发口径：仅统计新的、未归档的 lv0 细节事件
+            const activeEvents = events.filter(e => e.level === 0 && !e.is_archived);
             const allSummaries = activeEvents.map(e => e.summary).join('\n\n');
             const totalTokens = await WorldInfoService.countTokens(allSummaries);
 

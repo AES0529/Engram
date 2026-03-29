@@ -126,6 +126,13 @@ export class SaveEvent implements IStep {
         if (context.config.autoHide && range[1] > 0 && !isImport) {
             const startIndex = range[0] - 1;
             const endIndex = range[1] - 1;
+            Logger.info('SaveEvent', '准备执行自动隐藏', {
+                workflowRange: range,
+                hideRange: [startIndex, endIndex],
+                autoHide: context.config.autoHide,
+                isImport,
+                savedEventCount: savedEvents.length,
+            });
             hideMessageRange(startIndex, endIndex).catch(e => {
                 Logger.error('SaveEvent', '自动隐藏失败', e);
             });
