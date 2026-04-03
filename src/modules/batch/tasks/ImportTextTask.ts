@@ -6,7 +6,7 @@ import { WorkflowEngine } from '@/modules/workflow/core/WorkflowEngine';
 import { SaveEvent } from '@/modules/workflow/steps/persistence/SaveEvent';
 import { ParseJson } from '@/modules/workflow/steps/processing/ParseJson';
 import { BatchTask, IBatchTaskHandler } from '../types';
-import { BatchUtils } from '../utils/BatchUtils';
+import { BatchUtils } from '@/modules/batch/utils/BatchUtils';
 
 /** 外部导入模式 */
 export type ImportMode = 'fast' | 'detailed';
@@ -111,6 +111,27 @@ export class ImportTextTask implements IBatchTaskHandler {
 
                             for (const evt of savedEvents) {
                                 await embeddingService.embedEvent(evt);
+                            }
+
+                            // V1.0.8: 外部导入文本复用执行实体提取 (由于 FetchContext 已经旁路了，这里可以直接塞原文进去让它以为是聊天记录)
+                            try {
+                                const { createEntityWorkflow } = await import('@/modules/workflow/definitions/EntityWorkflow');
+                                await WorkflowEngine.run(createEntityWorkflow(), {
+                                    trigger: 'auto',
+                                    config: {
+                                        previewEnabled: false,
+                                        dryRun: false,
+                                        logType: 'entity_extraction',
+                                        category: 'entity_extraction'
+                                    },
+                                    input: {
+                                        isImport: true,
+                                        chatHistory: chunk, // 原文分块
+                                        range: [i, i]
+                                    }
+                                });
+                            } catch (entError: any) {
+                                Logger.error(LogModule.BATCH, `分块 ${i} 实体提取异常`, { error: entError.message });
                             }
 
                             success++;

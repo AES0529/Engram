@@ -65,16 +65,20 @@ export const EntityCard: React.FC<EntityCardProps> = ({
                 `}
                 onClick={onSelect}
             >
-                {/* 复选框 */}
-                <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={(e) => {
-                        e.stopPropagation();
-                        onCheck?.(e.target.checked);
-                    }}
-                    className="w-4 h-4 rounded border-border accent-primary"
-                />
+                {/* 复选框 (通过包装层扩大热区并防止冒泡) */}
+                <div
+                    className="p-2 -m-2 flex items-center justify-center shrink-0 select-none"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => {
+                            onCheck?.(e.target.checked);
+                        }}
+                        className="w-4 h-4 rounded border-border accent-primary cursor-pointer"
+                    />
+                </div>
 
                 {/* 主内容 */}
                 <div className="flex-1 min-w-0">
@@ -137,15 +141,19 @@ export const EntityCard: React.FC<EntityCardProps> = ({
         >
             {/* 头部：复选框 + 名称 + 类型 */}
             <div className="flex items-center gap-3 mb-2">
-                <input
-                    type="checkbox"
-                    checked={checked}
-                    onChange={(e) => {
-                        e.stopPropagation();
-                        onCheck?.(e.target.checked);
-                    }}
-                    className="w-4 h-4 rounded border-border accent-primary"
-                />
+                <div
+                    className="p-1.5 -m-1.5 flex items-center justify-center shrink-0 select-none"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => {
+                            onCheck?.(e.target.checked);
+                        }}
+                        className="w-4 h-4 rounded border-border accent-primary cursor-pointer"
+                    />
+                </div>
                 <span className="text-sm font-medium text-heading">
                     {entity.name}
                 </span>

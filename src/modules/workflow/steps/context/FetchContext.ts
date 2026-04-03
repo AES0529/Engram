@@ -39,13 +39,22 @@ export class FetchContext implements IStep {
         });
 
         // 调用 History 助手获取格式化后的文本
-        const history = MacroService.getChatHistory(range);
+        const isImport = Boolean(context.input.isImport);
+        let history = '';
+        
+        if (isImport) {
+            // V1.0.8: 如果是外部导入模式，跳过向 ST 索取聊天记录，直接使用传入的文本切片
+            history = (context.input.text || context.input.chatHistory || '') as string;
+            Logger.debug('FetchContext', '使用外部导入文本作为上下文', { bytes: history.length });
+        } else {
+            history = MacroService.getChatHistory(range);
+        }
 
         // 关键修复：确保 context.input.chatHistory 始终有值（即使为空字符串），
         // 这样 BuildPrompt 步骤就能正确通过 split/join 逻辑替换掉 {{chatHistory}} 占位符。
         context.input.chatHistory = history || '';
 
-        if (!history) {
+        if (!history && !isImport) {
             Logger.warn('FetchContext', '未获取到任何聊天记录，这可能导致提示词中出现空上下文');
         }
 

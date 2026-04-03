@@ -162,6 +162,20 @@ export const BatchProcessingPanel: React.FC = () => {
     const [startFloor, setStartFloor] = useState(1);
     const [endFloor, setEndFloor] = useState<number>(summarizerService.getStatus().currentFloor || 0);
 
+    // V1.0.8: 异步获取底层指针来初始化 startFloor
+    React.useEffect(() => {
+        const initFloors = async () => {
+            try {
+                const { chatManager } = await import('@/data/ChatManager');
+                const state = await chatManager.getState();
+                setStartFloor((state.last_summarized_floor || 0) + 1);
+            } catch (e) {
+                console.error('[BatchPanel] 获取初始楼层失败:', e);
+            }
+        };
+        initFloors();
+    }, []);
+
     // 外部导入状态
     const [importMode, setImportMode] = useState<ImportMode>('detailed');
     const [chunkSize, setChunkSize] = useState(2000);
@@ -390,87 +404,88 @@ export const BatchProcessingPanel: React.FC = () => {
                             )}
                         </div>
 
-                        {/* 美化的多级进度条与状态展示 (V0.9.21) */}
-                        {queue && (queue.isRunning || queue.tasks.length > 0) && (
-                            <div className="space-y-4 pt-2">
-                                {/* 1. 总体进度区域 */}
-                                <div>
-                                    <div className="flex justify-between items-center mb-1.5">
-                                        <span className="text-sm font-medium text-heading">批处理总体进度</span>
-                                        <span className={`text-sm font-mono ${queue.isRunning ? 'text-value' : 'text-muted-foreground'}`}>
-                                            {overallPercent}%
-                                        </span>
-                                    </div>
-                                    <div className="h-2 bg-muted rounded-full overflow-hidden relative border border-border/40">
-                                        <div
-                                            className="absolute top-0 left-0 h-full bg-primary transition-all duration-[var(--duration-slow)] ease-[var(--ease-out)]"
-                                            style={{ width: `${overallPercent}%` }}
-                                        >
-                                            {/* 如果正在运行，添加流光动画效果 */}
-                                            {queue.isRunning && (
-                                                <div className="absolute inset-0 bg-white/20 w-full animate-[shimmer_2s_infinite]"
-                                                    style={{ backgroundImage: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)' }} />
-                                            )}
-                                        </div>
-                                    </div>
-                                    <div className="flex justify-between mt-1 text-[11px] text-meta font-mono">
-                                        <span>当前阶段: {queue.currentTaskIndex + 1} / {queue.overallProgress.total}</span>
-                                        <span className={queue.isPaused ? "text-emphasis" : queue.isRunning ? "text-primary" : ""}>
-                                            {queue.isPaused ? "已暂停" : queue.isRunning ? "运行中..." : "等待中"}
-                                        </span>
-                                    </div>
-                                </div>
+                    </>
+                )}
 
-                                {/* 2. 活动任务焦点窗口 */}
-                                {queue.isRunning && currentTask && (
-                                    <div className="p-3 bg-card border border-primary/20 rounded-lg flex items-start gap-3 bg-primary/5">
-                                        <div className="mt-0.5">
-                                            <RefreshCw size={16} className="text-primary animate-spin" />
-                                        </div>
-                                        <div className="flex-1 space-y-1">
-                                            <div className="flex justify-between items-center text-sm">
-                                                <span className="text-heading font-medium">正在处理</span>
-                                            </div>
-                                            <div className="text-xs text-muted-foreground">
-                                                当前分配: <span className="text-emphasis font-mono">
-                                                    {TASK_TYPE_LABELS[queue.tasks[queue.currentTaskIndex]?.type] || '执行任务'}
-                                                </span>
-                                                {queue.tasks[queue.currentTaskIndex]?.floorRange && (
-                                                    <span className="ml-1 text-label whitespace-nowrap">
-                                                        (楼层 {queue.tasks[queue.currentTaskIndex]!.floorRange!.start}-{queue.tasks[queue.currentTaskIndex]!.floorRange!.end})
-                                                    </span>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                )}
-
-                                <Divider length={50} spacing="sm" />
-
-                                {/* 3. 详细子任务列表 (滚动视窗) */}
-                                <div className="space-y-1 max-h-40 overflow-y-auto">
-                                    {(queue.tasks || []).slice(0, 10).map((task) => (
-                                        <div key={task.id} className="flex items-center gap-2 text-xs">
-                                            <TaskStatusIcon status={task.status} />
-                                            <span className={task.status === 'running' ? 'text-foreground' : 'text-muted-foreground'}>
-                                                {TASK_TYPE_LABELS[task.type] || task.type}
-                                            </span>
-                                            {task.floorRange && (
-                                                <span className="text-muted-foreground/50 font-mono">
-                                                    #{task.floorRange.start}-{task.floorRange.end}
-                                                </span>
-                                            )}
-                                        </div>
-                                    ))}
-                                    {queue.tasks.length > 10 && (
-                                        <div className="text-xs text-muted-foreground/50">
-                                            ...还有 {queue.tasks.length - 10} 个任务
-                                        </div>
+                {/* 美化的多级进度条与状态展示 (V0.9.21) - 移出 analysis 块，即使没分析也能在后台跑的时候显示 */}
+                {queue && (queue.isRunning || queue.tasks.length > 0) && (
+                    <div className="space-y-4 pt-2">
+                        {/* 1. 总体进度区域 */}
+                        <div>
+                            <div className="flex justify-between items-center mb-1.5">
+                                <span className="text-sm font-medium text-heading">批处理总体进度</span>
+                                <span className={`text-sm font-mono ${queue.isRunning ? 'text-value' : 'text-muted-foreground'}`}>
+                                    {overallPercent}%
+                                </span>
+                            </div>
+                            <div className="h-2 bg-muted rounded-full overflow-hidden relative border border-border/40">
+                                <div
+                                    className="absolute top-0 left-0 h-full bg-primary transition-all duration-[var(--duration-slow)] ease-[var(--ease-out)]"
+                                    style={{ width: `${overallPercent}%` }}
+                                >
+                                    {/* 如果正在运行，添加流光动画效果 */}
+                                    {queue.isRunning && (
+                                        <div className="absolute inset-0 bg-white/20 w-full animate-[shimmer_2s_infinite]"
+                                            style={{ backgroundImage: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent)' }} />
                                     )}
                                 </div>
                             </div>
+                            <div className="flex justify-between mt-1 text-[11px] text-meta font-mono">
+                                <span>当前阶段: {queue.currentTaskIndex + 1} / {queue.overallProgress.total}</span>
+                                <span className={queue.isPaused ? "text-emphasis" : queue.isRunning ? "text-primary" : ""}>
+                                    {queue.isPaused ? "已暂停" : queue.isRunning ? "运行中..." : "等待中"}
+                                </span>
+                            </div>
+                        </div>
+
+                        {/* 2. 活动任务焦点窗口 */}
+                        {queue.isRunning && currentTask && (
+                            <div className="p-3 bg-card border border-primary/20 rounded-lg flex items-start gap-3 bg-primary/5">
+                                <div className="mt-0.5">
+                                    <RefreshCw size={16} className="text-primary animate-spin" />
+                                </div>
+                                <div className="flex-1 space-y-1">
+                                    <div className="flex justify-between items-center text-sm">
+                                        <span className="text-heading font-medium">正在处理</span>
+                                    </div>
+                                    <div className="text-xs text-muted-foreground">
+                                        当前分配: <span className="text-emphasis font-mono">
+                                            {TASK_TYPE_LABELS[queue.tasks[queue.currentTaskIndex]?.type] || '执行任务'}
+                                        </span>
+                                        {queue.tasks[queue.currentTaskIndex]?.floorRange && (
+                                            <span className="ml-1 text-label whitespace-nowrap">
+                                                (楼层 {queue.tasks[queue.currentTaskIndex]!.floorRange!.start}-{queue.tasks[queue.currentTaskIndex]!.floorRange!.end})
+                                            </span>
+                                        )}
+                                    </div>
+                                </div>
+                            </div>
                         )}
-                    </>
+
+                        <Divider length={50} spacing="sm" />
+
+                        {/* 3. 详细子任务列表 (滚动视窗) */}
+                        <div className="space-y-1 max-h-40 overflow-y-auto">
+                            {(queue.tasks || []).slice(0, 10).map((task) => (
+                                <div key={task.id} className="flex items-center gap-2 text-xs">
+                                    <TaskStatusIcon status={task.status} />
+                                    <span className={task.status === 'running' ? 'text-foreground' : 'text-muted-foreground'}>
+                                        {TASK_TYPE_LABELS[task.type] || task.type}
+                                    </span>
+                                    {task.floorRange && (
+                                        <span className="text-muted-foreground/50 font-mono">
+                                            #{task.floorRange.start}-{task.floorRange.end}
+                                        </span>
+                                    )}
+                                </div>
+                            ))}
+                            {queue.tasks.length > 10 && (
+                                <div className="text-xs text-muted-foreground/50">
+                                    ...还有 {queue.tasks.length - 10} 个任务
+                                </div>
+                            )}
+                        </div>
+                    </div>
                 )}
             </section>
 
