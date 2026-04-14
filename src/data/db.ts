@@ -197,7 +197,7 @@ export async function deleteDatabase(chatId: string): Promise<void> {
 /**
  * 列出所有 Engram 数据库名称
  */
-async function listAllDatabases(): Promise<string[]> {
+export async function listAllDatabases(): Promise<string[]> {
     const allDbs = await Dexie.getDatabaseNames();
     return allDbs.filter(name => name.startsWith('Engram_'));
 }
@@ -205,7 +205,7 @@ async function listAllDatabases(): Promise<string[]> {
 /**
  * 获取所有 Engram 数据库的 chatId 列表
  */
-async function listAllChatIds(): Promise<string[]> {
+export async function listAllChatIds(): Promise<string[]> {
     const dbNames = await listAllDatabases();
     return dbNames.map(name => name.replace('Engram_', ''));
 }
@@ -213,7 +213,7 @@ async function listAllChatIds(): Promise<string[]> {
 /**
  * 删除所有 Engram 数据库 (危险操作！)
  */
-async function deleteAllDatabases(): Promise<number> {
+export async function deleteAllDatabases(): Promise<number> {
     const dbNames = await listAllDatabases();
     for (const name of dbNames) {
         await Dexie.delete(name);
@@ -223,3 +223,33 @@ async function deleteAllDatabases(): Promise<number> {
     return dbNames.length;
 }
 
+export interface DatabaseStats {
+    chatId: string;
+    lastUpdateTime: number;
+}
+
+/**
+ * 获取单个数据库的统计信息（仅包含基础信息）
+ */
+export async function getDatabaseStats(chatId: string): Promise<DatabaseStats> {
+    try {
+        // 使用单独的实例，查询完毕后迅速关闭
+        const tempDb = new ChatDatabase(chatId);
+        if (!await Dexie.exists(tempDb.name)) {
+             tempDb.close();
+             return { chatId, lastUpdateTime: 0 };
+        }
+        
+        // 快速读取 meta 设置
+        const lastModifiedMeta = await tempDb.meta.get('lastModified');
+        tempDb.close();
+        
+        return {
+            chatId,
+            lastUpdateTime: lastModifiedMeta ? Number(lastModifiedMeta.value) : 0
+        };
+    } catch (e) {
+        Logger.error(MODULE, `Failed to get stats for chat ${chatId}`, e);
+        return { chatId, lastUpdateTime: 0 };
+    }
+}
