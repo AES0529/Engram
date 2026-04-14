@@ -275,6 +275,12 @@ export class EntityBuilder {
                         'Engram'
                     );
                 }
+
+                // P0 Bugfix: Workflow 路径保存后触发自动归档检查（与 saveRawEntities 对齐）
+                if (this.config.autoArchive ?? true) {
+                    await new Promise(r => setTimeout(r, 0));
+                    await this.checkAndArchiveEntities();
+                }
             } else {
                 Logger.info(LogModule.MEMORY_ENTITY, '实体提取预览完成', {
                     newCount: result?.newEntities?.length || 0,
