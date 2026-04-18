@@ -56,7 +56,7 @@ export class LlmRequest implements IStep {
             const response = await llmAdapter.generate({
                 systemPrompt: system,
                 userPrompt: user,
-                // presetId: context.config.presetId // TODO: 未来支持从 Workflow Config 指定 LLM Preset，允许不同步骤使用不同模型参数
+                presetId: context.prompt.presetId ?? undefined, // 从提示词模板中获取绑定的预设
                 internal: true, // 标记为内部请求，防止触发 Preprocessor
             });
 

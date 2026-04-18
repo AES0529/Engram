@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { SettingsManager } from "@/config/settings";
+import { useConfigStore } from "@/state/configStore";
 import { Switch } from "@/ui/components/core/Switch";
 import { useMemoryStore } from "@/state/memoryStore";
 import { getCurrentChatId } from "@/integrations/tavern";
@@ -13,8 +13,12 @@ import { GlobalDatabaseList } from '../components/GlobalDatabaseList';
 
 export const DataTab: React.FC = () => {
     const memoryStore = useMemoryStore();
+    const { linkedDeletion, updateConfig } = useConfigStore();
     const [, forceUpdate] = useState({});
-    const [linkedDeletion, setLinkedDeletion] = useState(SettingsManager.getSettings().linkedDeletion || { enabled: false, showConfirmation: true, deleteChatWorldbook: false });
+
+    const handleLinkedDeletionChange = (key: keyof typeof linkedDeletion) => (checked: boolean) => {
+        updateConfig('linkedDeletion', { ...linkedDeletion, [key]: checked } as any);
+    };
 
     const handleReset = async () => {
         const chatId = getCurrentChatId();
@@ -74,26 +78,18 @@ export const DataTab: React.FC = () => {
                             </div>
                         </div>
                         <Switch
-                            checked={linkedDeletion.enabled}
-                            onChange={(checked) => {
-                                const newSettings = { ...linkedDeletion, enabled: checked };
-                                setLinkedDeletion(newSettings);
-                                SettingsManager.set('linkedDeletion', newSettings);
-                            }}
+                            checked={linkedDeletion?.enabled ?? false}
+                            onChange={handleLinkedDeletionChange('enabled')}
                         />
                     </div>
 
-                    {linkedDeletion.enabled && (
+                    {(linkedDeletion?.enabled) && (
                         <div className="pl-14 space-y-3 border-t border-border pt-3">
                             <div className="flex items-center justify-between">
                                 <span className="text-sm text-muted-foreground">删除前确认</span>
                                 <Switch
-                                    checked={linkedDeletion.showConfirmation}
-                                    onChange={(checked) => {
-                                        const newSettings = { ...linkedDeletion, showConfirmation: checked };
-                                        setLinkedDeletion(newSettings);
-                                        SettingsManager.set('linkedDeletion', newSettings);
-                                    }}
+                                    checked={linkedDeletion.showConfirmation ?? true}
+                                    onChange={handleLinkedDeletionChange('showConfirmation')}
                                     className="scale-90"
                                 />
                             </div>
@@ -104,11 +100,7 @@ export const DataTab: React.FC = () => {
                                 </div>
                                 <Switch
                                     checked={linkedDeletion.deleteChatWorldbook ?? false}
-                                    onChange={(checked) => {
-                                        const newSettings = { ...linkedDeletion, deleteChatWorldbook: checked };
-                                        setLinkedDeletion(newSettings);
-                                        SettingsManager.set('linkedDeletion', newSettings);
-                                    }}
+                                    onChange={handleLinkedDeletionChange('deleteChatWorldbook')}
                                     className="scale-90"
                                 />
                             </div>

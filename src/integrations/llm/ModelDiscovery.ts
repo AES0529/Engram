@@ -65,49 +65,50 @@ export class ModelService {
     static async fetchOpenAIModels(config: FetchModelsConfig): Promise<ModelInfo[]> {
         const { apiUrl, apiKey, timeout = this.DEFAULT_TIMEOUT } = config;
 
-        // V0.9.9: 移除自动填充 /v1 逻辑
-        // 假设用户已提供正确的 base URL (如 http://localhost:8000/v1)
-        const baseUrl = apiUrl.replace(/\/+$/, '');
-        const modelsUrl = `${baseUrl}/models`;
-
         try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), timeout);
 
-            const headers: Record<string, string> = {
-                'Content-Type': 'application/json',
-            };
-            if (apiKey) {
-                headers['Authorization'] = `Bearer ${apiKey}`;
-            }
-
-            const response = await fetch(modelsUrl, {
-                method: 'GET',
-                headers,
+            // V1.5: 使用酒馆后端代理获取模型列表，解决 CORS 问题
+            // 我们利用 OpenAI 源的 reverse_proxy 逻辑通过后端转发
+            const proxyResponse = await fetch('/api/backends/chat-completions/status', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    chat_completion_source: 'openai',
+                    reverse_proxy: apiUrl,
+                    proxy_password: apiKey
+                }),
                 signal: controller.signal,
             });
 
             clearTimeout(timeoutId);
 
-            if (!response.ok) {
-                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+            if (!proxyResponse.ok) {
+                throw new Error(`HTTP ${proxyResponse.status}: ${proxyResponse.statusText}`);
             }
 
-            const data = await response.json();
-            const models: ModelInfo[] = (data?.data || data || []).map((m: any) => ({
+            const data = await proxyResponse.json();
+            
+            // 酒馆后端的返回结构通常是直接透传 API 的响应，或者是包装后的数据
+            // 对于 OpenAI 兼容接口，models 列表通常在 data.data 路径下
+            const modelsData = data?.data || [];
+            const models: ModelInfo[] = (Array.isArray(modelsData) ? modelsData : []).map((m: any) => ({
                 id: m.id || m.model,
                 name: m.name || m.id || m.model,
                 owned_by: m.owned_by,
             }));
 
-            Logger.info(MODULE, `Fetched ${models.length} models from OpenAI API`);
+            Logger.info(MODULE, `Fetched ${models.length} models through Backend Proxy`);
             return models.sort((a, b) => a.id.localeCompare(b.id));
 
         } catch (error: any) {
             if (error.name === 'AbortError') {
-                Logger.error(MODULE, 'OpenAI API request timeout');
+                Logger.error(MODULE, 'Backend Proxy request timeout');
             } else {
-                Logger.error(MODULE, `OpenAI API error: ${error.message}`);
+                Logger.error(MODULE, `Backend Proxy error: ${error.message}`);
             }
             throw error;
         }

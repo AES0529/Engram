@@ -1,20 +1,18 @@
 import React, { useState } from 'react';
-import { SettingsManager } from "@/config/settings";
+import { useConfigStore } from "@/state/configStore";
 import { Switch } from "@/ui/components/core/Switch";
 import { getCurrentChatId } from "@/integrations/tavern";
 import { Logger, LogModule } from "@/core/logger";
 
 export const SyncSection: React.FC = () => {
-    const [syncConfig, setSyncConfig] = useState(SettingsManager.getSettings().syncConfig || { enabled: false, autoSync: true });
+    const { syncConfig, updateConfig } = useConfigStore();
     const [syncStatus, setSyncStatus] = useState<'idle' | 'check' | 'syncing' | 'success' | 'error'>('idle');
     const [syncMessage, setSyncMessage] = useState<string>('');
     const [lastSyncTime, setLastSyncTime] = useState<number>(0);
     const chatId = getCurrentChatId();
 
     const handleConfigChange = (key: keyof typeof syncConfig) => (checked: boolean) => {
-        const newConfig = { ...syncConfig, [key]: checked };
-        setSyncConfig(newConfig);
-        SettingsManager.set('syncConfig', newConfig);
+        updateConfig('syncConfig', { ...syncConfig, [key]: checked } as any);
     };
 
     const handleManualSync = async () => {
@@ -108,12 +106,12 @@ export const SyncSection: React.FC = () => {
                     </div>
                 </div>
                 <Switch
-                    checked={syncConfig.enabled}
+                    checked={syncConfig?.enabled ?? false}
                     onChange={handleConfigChange('enabled')}
                 />
             </div>
 
-            {syncConfig.enabled && (
+            {syncConfig?.enabled && (
                 <div className="pl-14 space-y-3 border-t border-border pt-3">
                     <div className="flex items-center justify-between">
                         <div className="min-w-0 flex-1">
@@ -121,7 +119,7 @@ export const SyncSection: React.FC = () => {
                             <p className="text-xs text-muted-foreground/60">数据变动3秒后自动上传</p>
                         </div>
                         <Switch
-                            checked={syncConfig.autoSync}
+                            checked={syncConfig.autoSync ?? true}
                             onChange={handleConfigChange('autoSync')}
                             className="scale-90"
                         />

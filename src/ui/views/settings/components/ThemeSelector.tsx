@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { ThemeManager } from '@/ui/services/ThemeManager';
 import { themes, ThemeName } from '../../../styles/themes';
-import { SettingsManager } from '@/config/settings';
+import { useThemeStore } from '@/state/themeStore';
 
 interface ThemeOption {
     id: ThemeName;
@@ -12,16 +12,15 @@ interface ThemeOption {
 }
 
 export const ThemeSelector: React.FC = () => {
-    const [currentTheme, setCurrentTheme] = useState<ThemeName>('claudeDark');
+    const { theme: currentTheme, setTheme } = useThemeStore();
 
+    // Re-sync with ThemeManager if needed on mount, though unneeded because zustand is init correctly.
     useEffect(() => {
-        setCurrentTheme(ThemeManager.getTheme());
+        setTheme(ThemeManager.getTheme());
     }, []);
 
     const handleThemeChange = (themeId: ThemeName) => {
-        ThemeManager.setTheme(themeId);
-        SettingsManager.set('theme', themeId); // Persist to ST settings
-        setCurrentTheme(themeId);
+        setTheme(themeId);
     };
 
     // Prepare theme options for display

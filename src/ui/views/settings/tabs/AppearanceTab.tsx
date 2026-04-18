@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import { SettingsManager } from "@/config/settings";
+import React from 'react';
 import { useConfigStore } from "@/state/configStore";
 import { Switch } from "@/ui/components/core/Switch";
 import { NumberField } from '@/ui/components/form/FormComponents';
@@ -7,8 +6,14 @@ import { Sparkles } from 'lucide-react';
 import { ThemeSelector } from '../components/ThemeSelector';
 
 export const AppearanceTab: React.FC = () => {
-    const { enableAnimations, updateEnableAnimations, saveConfig } = useConfigStore();
-    const [, forceUpdate] = useState({});
+    const { enableAnimations, glassSettings, updateConfig } = useConfigStore();
+
+    const handleGlassChange = (key: keyof typeof glassSettings) => (val: any) => {
+        updateConfig('glassSettings', { ...glassSettings, [key]: val } as any);
+        import('@/ui/services/ThemeManager').then(({ ThemeManager }) => {
+            ThemeManager.setTheme(ThemeManager.getTheme());
+        });
+    };
 
     return (
         <div className="space-y-8 animate-in fade-in">
@@ -33,10 +38,7 @@ export const AppearanceTab: React.FC = () => {
                             </div>
                             <Switch
                                 checked={enableAnimations}
-                                onChange={(checked) => {
-                                    updateEnableAnimations(checked);
-                                    saveConfig();
-                                }}
+                                onChange={(checked) => updateConfig('enableAnimations', checked)}
                             />
                         </div>
                     </div>
@@ -57,40 +59,18 @@ export const AppearanceTab: React.FC = () => {
                             </div>
                         </div>
                         <Switch
-                            checked={SettingsManager.getSettings().glassSettings?.enabled ?? true}
-                            onChange={(checked) => {
-                                const current = SettingsManager.getSettings();
-                                const newSettings = {
-                                    ...current.glassSettings,
-                                    enabled: checked
-                                };
-                                SettingsManager.set('glassSettings', newSettings);
-                                import('@/ui/services/ThemeManager').then(({ ThemeManager }) => {
-                                    ThemeManager.setTheme(ThemeManager.getTheme());
-                                });
-                                forceUpdate({});
-                            }}
+                            checked={glassSettings?.enabled ?? true}
+                            onChange={handleGlassChange('enabled')}
                         />
                     </div>
 
-                    {(SettingsManager.getSettings().glassSettings?.enabled ?? true) && (
+                    {(glassSettings?.enabled ?? true) && (
                         <>
                             <NumberField
                                 label="不透明度 (Opacity)"
                                 description="调整面板背景的遮罩强度，数值越低越透明"
-                                value={SettingsManager.getSettings().glassSettings?.opacity ?? 0.8}
-                                onChange={(val) => {
-                                    const current = SettingsManager.getSettings();
-                                    const newSettings = {
-                                        ...current.glassSettings,
-                                        opacity: val
-                                    };
-                                    SettingsManager.set('glassSettings', newSettings);
-                                    import('@/ui/services/ThemeManager').then(({ ThemeManager }) => {
-                                        ThemeManager.setTheme(ThemeManager.getTheme());
-                                    });
-                                    forceUpdate({});
-                                }}
+                                value={glassSettings?.opacity ?? 0.8}
+                                onChange={handleGlassChange('opacity')}
                                 min={0}
                                 max={1}
                                 step={0.05}
@@ -98,19 +78,8 @@ export const AppearanceTab: React.FC = () => {
                             <NumberField
                                 label="背景磨砂 (Blur)"
                                 description="调整背景模糊程度 (px)"
-                                value={SettingsManager.getSettings().glassSettings?.blur ?? 10}
-                                onChange={(val) => {
-                                    const current = SettingsManager.getSettings();
-                                    const newSettings = {
-                                        ...current.glassSettings,
-                                        blur: val
-                                    };
-                                    SettingsManager.set('glassSettings', newSettings);
-                                    import('@/ui/services/ThemeManager').then(({ ThemeManager }) => {
-                                        ThemeManager.setTheme(ThemeManager.getTheme());
-                                    });
-                                    forceUpdate({});
-                                }}
+                                value={glassSettings?.blur ?? 10}
+                                onChange={handleGlassChange('blur')}
                                 min={0}
                                 max={50}
                                 step={1}

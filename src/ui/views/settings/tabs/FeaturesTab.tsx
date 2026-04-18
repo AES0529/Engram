@@ -1,18 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { SettingsManager } from "@/config/settings";
+import React from 'react';
+import { useConfigStore } from "@/state/configStore";
 import { Switch } from "@/ui/components/core/Switch";
 import { Eye } from 'lucide-react';
 import { summarizerService } from "@/modules/memory";
 import { preprocessor } from "@/modules/preprocessing";
-import { DEFAULT_PREPROCESSING_CONFIG } from "@/modules/preprocessing/types";
 
 export const FeaturesTab: React.FC = () => {
-    const [previewEnabled, setPreviewEnabled] = useState(SettingsManager.getSettings().summarizerConfig?.previewEnabled ?? true);
-    const [preprocessingPreviewEnabled, setPreprocessingPreviewEnabled] = useState(SettingsManager.getSettings().preprocessingConfig?.preview ?? DEFAULT_PREPROCESSING_CONFIG.preview);
+    const { summarizerConfig, preprocessingConfig, updateConfig } = useConfigStore();
 
-    useEffect(() => {
-        SettingsManager.loadSettings();
-    }, []);
+    const previewEnabled = summarizerConfig?.previewEnabled ?? true;
+    const preprocessingPreviewEnabled = preprocessingConfig?.preview ?? true;
 
     return (
         <div className="space-y-8 animate-in fade-in">
@@ -33,7 +30,7 @@ export const FeaturesTab: React.FC = () => {
                         <Switch
                             checked={previewEnabled}
                             onChange={(checked) => {
-                                setPreviewEnabled(checked);
+                                updateConfig('summarizerConfig', { ...summarizerConfig, previewEnabled: checked });
                                 summarizerService.updateConfig({ previewEnabled: checked });
                             }}
                         />
@@ -57,9 +54,9 @@ export const FeaturesTab: React.FC = () => {
                         <Switch
                             checked={preprocessingPreviewEnabled}
                             onChange={(checked) => {
-                                setPreprocessingPreviewEnabled(checked);
-                                const currentConfig = preprocessor.getConfig();
-                                preprocessor.saveConfig({ ...currentConfig, preview: checked });
+                                const newConfig = { ...preprocessingConfig, preview: checked };
+                                updateConfig('preprocessingConfig', newConfig as any);
+                                preprocessor.saveConfig(newConfig as any);
                             }}
                         />
                     </div>

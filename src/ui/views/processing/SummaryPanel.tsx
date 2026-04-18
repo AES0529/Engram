@@ -245,10 +245,20 @@ export const SummaryPanel: React.FC<SummaryPanelProps> = ({
                                         {status.running ? <CheckCircle2 size={18} /> : <AlertCircle size={18} />}
                                         {status.running ? '运行中' : '已停止'}
                                     </div>
+                                    {status.running && (
+                                        <div className="text-[10px] text-muted-foreground mt-1">
+                                            计划于第 <span className="text-primary font-mono">{status.lastSummarizedFloor + settings.floorInterval}</span> 层触发
+                                        </div>
+                                    )}
                                 </div>
                                 <div>
                                     <span className="text-xs text-muted-foreground block mb-1">待处理</span>
-                                    <div className="text-3xl font-light text-amber-500 font-mono">{status.pendingFloors}</div>
+                                    <div className="flex items-baseline gap-2">
+                                        <div className="text-3xl font-light text-amber-500 font-mono">{status.pendingFloors}</div>
+                                        <div className="text-[10px] text-muted-foreground">
+                                            下个范围: <span className="font-mono">{status.lastSummarizedFloor + 1} - {status.lastSummarizedFloor + Math.max(1, settings.floorInterval - settings.bufferSize)}</span>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 

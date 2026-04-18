@@ -140,12 +140,10 @@ class LLMAdapter {
                 preset = settings.apiSettings?.llmPresets?.find(p => p.id === settings.apiSettings?.selectedPresetId);
             }
 
-            // 根据预设类型选择执行路径
-            if (preset?.source === 'custom' && preset.custom) {
-                return await this.executeWithCustomApi(request, preset, helper);
-            } else {
-                return await this.executeWithTavern(request, helper, preset);
-            }
+            // 统一提取预设中的参数配置
+            const customApiConfig = preset ? this.extractPresetParameters(preset) : undefined;
+
+            return await this.callTavernHelper(request, helper, customApiConfig, preset);
 
         } catch (e) {
             const errorMsg = e instanceof Error ? e.message : String(e);
@@ -165,46 +163,38 @@ class LLMAdapter {
     // 执行路径：custom (自定义 API)
     // =========================================================================
 
-    private async executeWithCustomApi(
-        request: LLMRequest,
-        preset: LLMPreset,
-        helper: NonNullable<ReturnType<typeof getTavernHelper>>
-    ): Promise<LLMResponse> {
-        Logger.info(MODULE, `使用自定义 API: ${preset.name}`);
+    // =========================================================================
+    // 助手方法：提取预设参数
+    // =========================================================================
 
-        // 构建 custom_api 配置
-        const customApiConfig: Record<string, any> = {
-            // 连接配置
-            apiurl: preset.custom!.apiUrl,
-            key: preset.custom!.apiKey,
-            model: preset.custom!.model,
-            source: 'openai', // 自定义 API 走 OpenAI 兼容接口
-            stream: preset.stream ?? false, // V1.5 透传给 Custom OpenAi 端点强制验证
-
+    private extractPresetParameters(preset: LLMPreset): Record<string, any> {
+        const config: Record<string, any> = {
             // 采样参数
             temperature: preset.parameters?.temperature,
             max_tokens: preset.parameters?.maxTokens,
             top_p: preset.parameters?.topP,
-            top_k: preset.parameters?.topK ?? 60, // V1.5
+            top_k: preset.parameters?.topK,
             frequency_penalty: preset.parameters?.frequencyPenalty,
             presence_penalty: preset.parameters?.presencePenalty,
             max_context: preset.parameters?.maxContext,
         };
 
-        return await this.callTavernHelper(request, helper, customApiConfig);
-    }
+        // 移除 undefined 项，避免覆盖酒馆默认值
+        Object.keys(config).forEach(key => config[key] === undefined && delete config[key]);
 
-    // =========================================================================
-    // 执行路径：tavern (使用酒馆当前配置)
-    // =========================================================================
+        // 如果是 custom，额外添加连接信息
+        if (preset.source === 'custom' && preset.custom) {
+            config.apiurl = preset.custom.apiUrl;
+            config.key = preset.custom.apiKey;
+            config.model = preset.custom.model;
+            config.source = 'openai';
+            config.stream = preset.stream ?? false;
+        } else if (preset.modelOverride) {
+            // 如果是非 custom 预设但指定了模型名，也强制覆盖
+            config.model = preset.modelOverride;
+        }
 
-    private async executeWithTavern(
-        request: LLMRequest,
-        helper: NonNullable<ReturnType<typeof getTavernHelper>>,
-        preset?: LLMPreset
-    ): Promise<LLMResponse> {
-        // 直接使用酒馆当前配置，不做覆盖
-        return await this.callTavernHelper(request, helper);
+        return config;
     }
 
     // =========================================================================
@@ -214,7 +204,8 @@ class LLMAdapter {
     private async callTavernHelper(
         request: LLMRequest,
         helper: NonNullable<ReturnType<typeof getTavernHelper>>,
-        customApiConfig?: Record<string, any>
+        customApiConfig?: Record<string, any>,
+        currentPreset?: LLMPreset
     ): Promise<LLMResponse> {
         // =========================================================================
         // Prompt Pre-processing (V1.0 Fix)
@@ -231,12 +222,13 @@ class LLMAdapter {
         // 调用 TavernHelper
         // =========================================================================
 
-        // V1.5 获取此请求所用的 Preset (如果是内部预设，需要再查一次或从上层传下来)
-        // 这里基于 SettingsManager 直接根据 context 取一下当前在跑哪个 preset
-        const settings = SettingsManager.getSettings();
-        let currentPreset = request.presetId
-            ? settings.apiSettings?.llmPresets?.find(p => p.id === request.presetId)
-            : settings.apiSettings?.llmPresets?.find(p => p.id === settings.apiSettings?.selectedPresetId);
+        // V1.5 获取此请求所用的 Preset (由 executeRequest 传递进来，或者回退到默认)
+        if (!currentPreset) {
+            const settings = SettingsManager.getSettings();
+            currentPreset = request.presetId
+                ? settings.apiSettings?.llmPresets?.find(p => p.id === request.presetId)
+                : settings.apiSettings?.llmPresets?.find(p => p.id === settings.apiSettings?.selectedPresetId);
+        }
 
         const generationOptions = {
             should_stream: currentPreset?.stream ?? false, // 释放底层硬编码
