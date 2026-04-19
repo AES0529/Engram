@@ -338,10 +338,10 @@ class Retriever {
             try {
                 const { WorkflowEngine } = await import('@/modules/workflow/core/WorkflowEngine');
                 const { KeywordRetrieveStep } = await import('@/modules/workflow/steps/rag/KeywordRetrieveStep');
-                
+
                 // 确保有扫描背景
                 const scanQuery = options?.scanQuery || this.getRecentContext(5) || "";
-                
+
                 const keywordContext = await WorkflowEngine.run({
                     name: 'AgenticKeywordScan',
                     steps: [new KeywordRetrieveStep()]
@@ -355,7 +355,7 @@ class Retriever {
 
                 if (keywordContext.data?.keywordEntityIds) {
                     recalledEntities = keywordContext.data.keywordEntityIds;
-                    
+
                     // 将实体也送入 BrainRecallCache 注册
                     if (brainConfig.enabled && !options?.isManualTest) {
                         const entityCandidates: RecallCandidate[] = recalledEntities.map(re => ({
@@ -415,13 +415,7 @@ class Retriever {
             resultCount: finalNodes.length,
         });
 
-        return { 
-            entries, 
-            nodes: finalNodes, 
-            candidates, 
-            recalledEntities, 
-            totalTime 
-        };
+        return { entries, nodes: finalNodes, candidates };
     }
 
 
