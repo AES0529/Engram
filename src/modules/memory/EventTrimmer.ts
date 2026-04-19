@@ -119,7 +119,7 @@ class EventTrimmer {
                 trigger: manual ? 'manual' : 'auto',
                 config: {
                     keepRecentCount: config.keepRecentCount,
-                    previewEnabled: config.previewEnabled,
+                    previewEnabled: (SettingsManager.get('globalPreviewEnabled') ?? true) && (config.previewEnabled ?? true),
                     templateId: 'builtin_trim', // Hardcoded for now, matches BuildPrompt category mapping potentially
                     logType: 'trimming'
                 }

@@ -86,7 +86,7 @@ class Preprocessor {
             const context = await WorkflowEngine.run(createPreprocessWorkflow(), {
                 trigger: 'auto',
                 config: {
-                    previewEnabled: config.preview,
+                    previewEnabled: (SettingsManager.get('globalPreviewEnabled') ?? true) && (config.preview ?? true),
                     templateId: config.templateId,
                     logType: 'query' // Log as 'query' type for ModelLogger
                 },

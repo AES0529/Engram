@@ -427,11 +427,14 @@ class SummarizerService {
             const { WorldBookSlotService } = await import('@/integrations/tavern/worldbook');
             await WorldBookSlotService.init();
 
+            const globalPreviewEnabled = SettingsManager.get('globalPreviewEnabled') ?? true;
+            const previewEnabled = manual || (globalPreviewEnabled && this.config.previewEnabled);
+
             const context = await WorkflowEngine.run(createSummaryWorkflow(), {
                 trigger: manual ? 'manual' : 'auto',
                 signal: cancelSignal,
                 config: {
-                    previewEnabled: this.config.previewEnabled,
+                    previewEnabled: previewEnabled,
                     autoHide: this.config.autoHide,
                     templateId: this.config.promptTemplateId,
                     logType: 'summarize'

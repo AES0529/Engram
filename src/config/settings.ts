@@ -13,6 +13,7 @@ export interface EngramSettings {
     lastReadVersion: string; // 最后已读的版本号
     lastOpenedTab: string; // 上次打开的主界面页面
     summarizerConfig: Partial<any>; // 总结器配置 (Legacy)
+    globalPreviewEnabled: boolean; // 是否启用全局预览预览 (V1.4.7)
     trimmerConfig: Partial<any>; // 精简器配置
     regexRules: RegexRule[]; // 正则清洗规则列表
     apiSettings: EngramAPISettings | null; // API 配置（LLM 预设、向量化、重排序等）
@@ -54,6 +55,7 @@ const defaultSettings: EngramSettings = Object.freeze({
     lastReadVersion: '0.0.0',
     lastOpenedTab: 'dashboard',
     summarizerConfig: {},
+    globalPreviewEnabled: true, // 默认开启
     trimmerConfig: {},
     regexRules: [],
     apiSettings: null,

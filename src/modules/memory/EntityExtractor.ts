@@ -217,9 +217,9 @@ export class EntityBuilder {
             const { createEntityWorkflow } = await import('@/modules/workflow/definitions/EntityWorkflow');
             const { MacroService } = await import('@/integrations/tavern');
 
-            // V1.0.4: 使用全局 "启用修订模式" 开关 (复用 summarizerConfig)
-            const globalSettings = SettingsManager.get('summarizerConfig');
-            const previewEnabled = manual || (globalSettings?.previewEnabled ?? true);
+            // V1.4.7: 使用全局预览开关和实体独立预览开关
+            const globalPreviewEnabled = SettingsManager.get('globalPreviewEnabled') ?? true;
+            const previewEnabled = manual || (globalPreviewEnabled && (this.config.previewEnabled ?? true));
 
             // 获取聊天历史 (如果是单条楼层，则宏系统会自动处理)
             const chatHistory = MacroService.getChatHistory(range || [floor, floor]);

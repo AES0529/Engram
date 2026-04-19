@@ -35,6 +35,8 @@ export interface EntityExtractConfig {
     autoArchive?: boolean;
     /** 实体数量上限 (默认 50) */
     archiveLimit?: number;
+    /** 是否启用预览确认 */
+    previewEnabled?: boolean;
 }
 
 export interface GlobalRegexConfig {

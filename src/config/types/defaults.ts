@@ -100,6 +100,7 @@ export const DEFAULT_ENTITY_CONFIG: EntityExtractConfig = {
     keepRecentCount: 5,
     autoArchive: true,      // V1.4.2 默认开启归档管家
     archiveLimit: 50,      // 默认上限 50
+    previewEnabled: true,
 };
 
 const DEFAULT_REGEX_CONFIG: GlobalRegexConfig = {

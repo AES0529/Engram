@@ -36,6 +36,7 @@ const debouncedSave = (state: ConfigState) => {
         SettingsManager.set('apiSettings', newApiSettings as any);
         SettingsManager.set('summarizerConfig', state.summarizerConfig);
         SettingsManager.set('preprocessingConfig', state.preprocessingConfig);
+        SettingsManager.set('globalPreviewEnabled', state.globalPreviewEnabled);
         SettingsManager.set('linkedDeletion', state.linkedDeletion);
         SettingsManager.set('glassSettings', state.glassSettings);
         SettingsManager.set('syncConfig', state.syncConfig);
@@ -55,6 +56,7 @@ export interface ConfigState {
     // UI & Settings
     enableAnimations: boolean;
     summarizerConfig: EngramSettings['summarizerConfig'];
+    globalPreviewEnabled: boolean;
     preprocessingConfig: EngramSettings['preprocessingConfig'];
     linkedDeletion: EngramSettings['linkedDeletion'];
     glassSettings: EngramSettings['glassSettings'];
@@ -102,6 +104,7 @@ export const useConfigStore = create<ConfigState>((set, get) => ({
     enableAnimations: savedContext.enableAnimations ?? defaults.enableAnimations ?? true,
 
     summarizerConfig: globalSettings.summarizerConfig || {},
+    globalPreviewEnabled: globalSettings.globalPreviewEnabled ?? true,
     preprocessingConfig: globalSettings.preprocessingConfig || null,
     linkedDeletion: globalSettings.linkedDeletion || { enabled: false, deleteWorldbook: false, deleteChatWorldbook: false, deleteIndexedDB: false, showConfirmation: true },
     glassSettings: globalSettings.glassSettings || { enabled: true, opacity: 0.3, blur: 10 },
