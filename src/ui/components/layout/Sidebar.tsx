@@ -96,18 +96,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
     // PC 端侧边栏
     if (!isMobile) {
         return (
-            <motion.aside
-                initial={{ opacity: 0, x: -20 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.4, ease: "easeOut" }}
-                className="hidden md:flex w-36 shrink-0 bg-sidebar/80 backdrop-blur-xl flex-col z-40 pt-4 px-2 border-r border-border/50"
+            <aside
+                className="flex w-36 shrink-0 bg-sidebar/80 backdrop-blur-xl flex-col z-40 pt-4 px-2 border-r border-border/50 max-md:hidden"
+                style={{ visibility: 'visible', display: 'flex' }}
             >
                 <motion.nav
                     className="flex-1 w-full flex flex-col gap-1 overflow-y-auto no-scrollbar"
-                    initial="hidden"
+                    initial="hide"
                     animate="show"
                     variants={{
-                        hidden: { opacity: 0 },
+                        hide: { opacity: 0 },
                         show: {
                             opacity: 1,
                             transition: { staggerChildren: 0.05 }
@@ -120,7 +118,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         return (
                             <motion.button
                                 variants={{
-                                    hidden: { opacity: 0, x: -10 },
+                                    hide: { opacity: 0, x: -10 },
                                     show: { opacity: 1, x: 0 }
                                 }}
                                 key={item.id}
@@ -153,7 +151,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 >
                     <BottomArea />
                 </motion.div>
-            </motion.aside>
+            </aside>
         );
     }
 
@@ -191,10 +189,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
                 <motion.nav
                     className="space-y-2 flex-1 overflow-y-auto"
-                    initial="hidden"
+                    initial="hide"
                     animate="show"
                     variants={{
-                        hidden: { opacity: 0 },
+                        hide: { opacity: 0 },
                         show: {
                             opacity: 1,
                             transition: { delayChildren: 0.1, staggerChildren: 0.05 }
@@ -207,7 +205,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         return (
                             <motion.button
                                 variants={{
-                                    hidden: { opacity: 0, x: -20 },
+                                    hide: { opacity: 0, x: -20 },
                                     show: { opacity: 1, x: 0 }
                                 }}
                                 key={item.id}
