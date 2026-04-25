@@ -51,6 +51,16 @@ export interface RecallCandidate {
     embeddingVector?: number[];
 }
 
+/**
+ * 类脑缓存快照格式（用于导出/导入持久化）
+ */
+export interface BrainCacheSnapshot {
+    version: 1;
+    exportedAt: number;
+    currentRound: number;
+    slots: Omit<MemorySlot, 'embeddingVector'>[];
+}
+
 export class BrainRecallCache {
     private shortTermMemory = new Map<string, MemorySlot>();
     private currentRound: number = 0;
@@ -386,6 +396,67 @@ export class BrainRecallCache {
         this.shortTermMemory.clear();
         this.currentRound = 0;
         Logger.info(LogModule.RAG_CACHE, 'hardReset: 类脑召回缓存已重置');
+    }
+
+    // ==================== 持久化：导出/导入 ====================
+
+    /**
+     * 将当前类脑缓存的全部状态导出为 JSON 字符串
+     * 包括：短期记忆池所有槽位、轮次计数器
+     * 排除 embeddingVector（体积过大，会在下次召回时从 DB 自动填充）
+     */
+    exportToJSON(): string {
+        const snapshot: BrainCacheSnapshot = {
+            version: 1,
+            exportedAt: Date.now(),
+            currentRound: this.currentRound,
+            slots: [...this.shortTermMemory.values()].map(slot => {
+                const { embeddingVector, ...rest } = slot;
+                return rest;
+            }),
+        };
+        return JSON.stringify(snapshot, null, 2);
+    }
+
+    /**
+     * 从 JSON 字符串恢复类脑缓存状态
+     * 完全覆盖当前的短期记忆池和轮次计数器（完美恢复）
+     * @param json 之前通过 exportToJSON() 导出的字符串
+     */
+    importFromJSON(json: string): void {
+        const snapshot = JSON.parse(json);
+
+        if (snapshot.version !== 1) {
+            throw new Error(`不支持的快照版本: ${snapshot.version}`);
+        }
+        if (!Array.isArray(snapshot.slots) || typeof snapshot.currentRound !== 'number') {
+            throw new Error('快照数据结构不合法');
+        }
+
+        this.shortTermMemory.clear();
+        this.currentRound = snapshot.currentRound;
+
+        for (const slot of snapshot.slots) {
+            if (slot.id && typeof slot.finalScore === 'number') {
+                this.shortTermMemory.set(slot.id, {
+                    id: slot.id,
+                    label: slot.label || slot.id,
+                    category: slot.category || 'event',
+                    embeddingStrength: slot.embeddingStrength || 0,
+                    rerankStrength: slot.rerankStrength || 0,
+                    finalScore: slot.finalScore,
+                    firstRound: slot.firstRound || 0,
+                    lastRound: slot.lastRound || 0,
+                    recallCount: slot.recallCount || 0,
+                    consecutiveWorkingCount: slot.consecutiveWorkingCount || 0,
+                    tier: slot.tier || 'shortTerm',
+                });
+            }
+        }
+
+        Logger.info(LogModule.RAG_CACHE,
+            `类脑缓存已从快照恢复: ${this.shortTermMemory.size} 个槽位, 轮次=${this.currentRound}`
+        );
     }
 
     getShortTermSnapshot(): MemorySlot[] {
