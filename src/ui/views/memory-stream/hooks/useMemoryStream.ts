@@ -57,6 +57,7 @@ export function useMemoryStream(initialTab: ViewTab = 'list') {
     const [showPreview, setShowPreview] = useState(false);
     const [previewContent, setPreviewContent] = useState('');
     const [showImportModal, setShowImportModal] = useState(false);
+    const [showEntityPatchModal, setShowEntityPatchModal] = useState(false);
     const [availableDbs, setAvailableDbs] = useState<string[]>([]);
     const [selectedDbToImport, setSelectedDbToImport] = useState<string>('');
     const [showMobileActions, setShowMobileActions] = useState(false);
@@ -453,6 +454,39 @@ export function useMemoryStream(initialTab: ViewTab = 'list') {
         }
     }, [hasChanges]);
 
+    const handleOpenEntityPatchModal = useCallback(() => {
+        if (hasChanges) {
+            if (!confirm('您有未保存的编辑内容，JSON 批改会直接写入实体库并刷新列表，确定要继续吗？')) {
+                return;
+            }
+            setPendingEntityChanges(new Map());
+        }
+        setShowEntityPatchModal(true);
+    }, [hasChanges]);
+
+    const handleEntityPatchExecute = useCallback(async (jsonText: string) => {
+        try {
+            setIsLoading(true);
+            const result = await store.applyEntityPatchesFromJSON(jsonText);
+            setShowEntityPatchModal(false);
+            setPendingEntityChanges(new Map());
+            setSelectedId(null);
+            setViewMode('browse');
+            await loadEntities();
+
+            const { MacroService } = await import('@/integrations/tavern/prompt/macros');
+            await MacroService.refreshEngramCache();
+
+            notificationService.success(`实体批改完成：${result.operations} 个操作，新增 ${result.created} 个，更新 ${result.updated} 个`, 'MemoryStream');
+        } catch (error: any) {
+            console.error('[MemoryStream] Entity patch failed:', error);
+            notificationService.error('实体批改失败: ' + (error.message || '未知错误'), 'MemoryStream');
+            throw error;
+        } finally {
+            setIsLoading(false);
+        }
+    }, [store.applyEntityPatchesFromJSON, loadEntities]);
+
     const handleImportExecute = useCallback(async () => {
         if (!selectedDbToImport) {
             notificationService.warning('请选择要导入的数据库', 'MemoryStream');
@@ -484,7 +518,7 @@ export function useMemoryStream(initialTab: ViewTab = 'list') {
         entitySortMode, entityGroupMode,
         hasChanges, isReembedding, pendingChanges, pendingEntityChanges,
         showPreview, previewContent,
-        showImportModal, availableDbs, selectedDbToImport,
+        showImportModal, showEntityPatchModal, availableDbs, selectedDbToImport,
         showMobileActions,
 
         // Derived State
@@ -495,7 +529,7 @@ export function useMemoryStream(initialTab: ViewTab = 'list') {
         setSearchQuery, setSortOrder, setShowActiveOnly,
         setEntitySortMode, setEntityGroupMode,
         setShowPreview, setPreviewContent,
-        setShowImportModal, setSelectedDbToImport,
+        setShowImportModal, setShowEntityPatchModal, setSelectedDbToImport,
         setShowMobileActions, setCheckedIds,
 
         // Callbacks
@@ -507,6 +541,7 @@ export function useMemoryStream(initialTab: ViewTab = 'list') {
         handleToggleEventArchive,
         handleBatchSave, handleDelete, handleBatchDelete,
         handleReembedAll, handleOpenImportModal, handleImportExecute,
+        handleOpenEntityPatchModal, handleEntityPatchExecute,
         handleCreateEvent, handleCreateEntity,
         loadEvents, loadEntities,
     };

@@ -1,5 +1,5 @@
 import { MacroService } from '@/integrations/tavern';
-import { ArrowDownUp, Database, FileText, Filter, Plus, RefreshCw, Save, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowDownUp, Braces, Database, FileText, Filter, Plus, RefreshCw, Save, Sparkles, Trash2 } from 'lucide-react';
 import React from 'react';
 import type { SortOrder, ViewTab } from '../hooks/useMemoryStream';
 
@@ -19,6 +19,7 @@ interface ActionBarProps {
     onSave: () => void;
     onRefresh: () => void;
     onBatchDelete: () => void;
+    onEntityPatchClick: () => void;
     onImportClick: () => void;
     onReembed: () => void;
     onSortToggle: () => void;
@@ -43,6 +44,7 @@ export const ActionBar: React.FC<ActionBarProps> = ({
     onSave,
     onRefresh,
     onBatchDelete,
+    onEntityPatchClick,
     onImportClick,
     onReembed,
     onSortToggle,
@@ -114,6 +116,17 @@ export const ActionBar: React.FC<ActionBarProps> = ({
                         <Database size={12} />
                         合并导入
                     </button>
+
+                    {viewTab === 'entities' && (
+                        <button
+                            onClick={onEntityPatchClick}
+                            className="inline-flex items-center gap-1.5 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground rounded transition-colors"
+                            title="粘贴 JSON 批量修改或添加实体"
+                        >
+                            <Braces size={12} />
+                            JSON批改
+                        </button>
+                    )}
 
                     {viewTab === 'list' && (
                         <button
@@ -187,6 +200,16 @@ export const ActionBar: React.FC<ActionBarProps> = ({
                                     <Database size={14} className="text-muted-foreground" />
                                     合并导入
                                 </button>
+
+                                {viewTab === 'entities' && (
+                                    <button
+                                        onClick={() => { onEntityPatchClick(); onMobileActionsClose(); }}
+                                        className="flex items-center gap-2 px-3 py-2 text-xs text-foreground hover:bg-muted text-left"
+                                    >
+                                        <Braces size={14} className="text-muted-foreground" />
+                                        JSON批改
+                                    </button>
+                                )}
 
                                 {viewTab === 'list' && (
                                     <>

@@ -11,6 +11,7 @@ import { useMemoryStream } from './hooks/useMemoryStream';
 
 // Sections & Modals
 import { ImportModal } from './modals/ImportModal';
+import { EntityPatchModal } from './modals/EntityPatchModal';
 import { PreviewModal } from './modals/PreviewModal';
 import { ActionBar } from './sections/ActionBar';
 import { EntityList } from './sections/EntityList';
@@ -139,6 +140,7 @@ export const MemoryStream: React.FC<MemoryStreamProps> = ({ initialTab }) => {
                         onSave={ms.handleBatchSave}
                         onRefresh={() => { ms.loadEvents(); ms.loadEntities(); }}
                         onBatchDelete={ms.handleBatchDelete}
+                        onEntityPatchClick={ms.handleOpenEntityPatchModal}
                         onImportClick={ms.handleOpenImportModal}
                         onReembed={ms.handleReembedAll}
                         onSortToggle={() => ms.setSortOrder(ms.sortOrder === 'asc' ? 'desc' : 'asc')}
@@ -245,6 +247,12 @@ export const MemoryStream: React.FC<MemoryStreamProps> = ({ initialTab }) => {
                 availableDbs={ms.availableDbs}
                 selectedDb={ms.selectedDbToImport}
                 onSelectDb={ms.setSelectedDbToImport}
+            />
+
+            <EntityPatchModal
+                isOpen={ms.showEntityPatchModal}
+                onClose={() => ms.setShowEntityPatchModal(false)}
+                onExecute={ms.handleEntityPatchExecute}
             />
         </div>
     );
