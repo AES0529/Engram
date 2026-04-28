@@ -487,6 +487,16 @@ export function useMemoryStream(initialTab: ViewTab = 'list') {
         }
     }, [store.applyEntityPatchesFromJSON, loadEntities]);
 
+    const handleEntityPatchPreview = useCallback(async (jsonText: string) => {
+        try {
+            return await store.previewEntityPatchesFromJSON(jsonText);
+        } catch (error: any) {
+            console.error('[MemoryStream] Entity patch preview failed:', error);
+            notificationService.error('实体批改预览失败: ' + (error.message || '未知错误'), 'MemoryStream');
+            throw error;
+        }
+    }, [store.previewEntityPatchesFromJSON]);
+
     const handleImportExecute = useCallback(async () => {
         if (!selectedDbToImport) {
             notificationService.warning('请选择要导入的数据库', 'MemoryStream');
@@ -541,7 +551,7 @@ export function useMemoryStream(initialTab: ViewTab = 'list') {
         handleToggleEventArchive,
         handleBatchSave, handleDelete, handleBatchDelete,
         handleReembedAll, handleOpenImportModal, handleImportExecute,
-        handleOpenEntityPatchModal, handleEntityPatchExecute,
+        handleOpenEntityPatchModal, handleEntityPatchPreview, handleEntityPatchExecute,
         handleCreateEvent, handleCreateEntity,
         loadEvents, loadEntities,
     };

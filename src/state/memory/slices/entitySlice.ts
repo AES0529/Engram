@@ -5,7 +5,7 @@ import yaml from 'js-yaml';
 import type { StateCreator } from 'zustand';
 import { getCurrentDb, tryGetCurrentDb } from './coreSlice';
 
-interface EntityPatchOperation {
+export interface EntityPatchOperation {
     op: 'add' | 'replace' | 'remove';
     path: string;
     value?: unknown;
@@ -19,6 +19,33 @@ interface BatchEntityPatchResult {
     created: number;
     updated: number;
     operations: number;
+}
+
+export interface EntityPatchPreviewDiff {
+    effectiveOp: EntityPatchOperation['op'];
+    index: number;
+    isWholeEntity: boolean;
+    newValue?: unknown;
+    oldValue?: unknown;
+    op: EntityPatchOperation['op'];
+    path: string;
+}
+
+export interface EntityPatchPreviewItem {
+    action: 'create' | 'update' | 'delete' | 'noop';
+    diffs: EntityPatchPreviewDiff[];
+    entityId?: string;
+    entityName: string;
+    next?: EntityNode;
+    previous?: EntityNode;
+}
+
+export interface EntityPatchPreview {
+    created: number;
+    deleted: number;
+    items: EntityPatchPreviewItem[];
+    operations: number;
+    updated: number;
 }
 
 function profileToYaml(name: string, type: string, profile: Record<string, unknown>): string {
@@ -46,7 +73,7 @@ function normalizeEntityType(value: unknown): EntityNode['type'] {
     return EntityType.Unknown;
 }
 
-function createEntityFromPatch(name: string, value?: unknown): EntityNode {
+function createEntityFromPatch(name: string, value?: unknown, id?: string): EntityNode {
     const source = value && typeof value === 'object' && !Array.isArray(value) ? value as Partial<EntityNode> : {};
     const profile = source.profile && typeof source.profile === 'object' && !Array.isArray(source.profile)
         ? source.profile as Record<string, unknown>
@@ -56,7 +83,7 @@ function createEntityFromPatch(name: string, value?: unknown): EntityNode {
     return {
         aliases: Array.isArray(source.aliases) ? [...new Set(source.aliases.filter((alias): alias is string => typeof alias === 'string' && alias.trim().length > 0).map(alias => alias.trim()))] : [],
         description: typeof source.description === 'string' ? source.description : profileToYaml(name, type, profile),
-        id: generateShortUUID('ent_'),
+        id: id || generateShortUUID('ent_'),
         is_archived: Boolean(source.is_archived),
         is_locked: Boolean(source.is_locked),
         last_updated_at: Date.now(),
@@ -64,6 +91,10 @@ function createEntityFromPatch(name: string, value?: unknown): EntityNode {
         profile,
         type,
     };
+}
+
+function cloneEntity(entity: EntityNode): EntityNode {
+    return structuredClone(entity) as EntityNode;
 }
 
 function parseEntityPatchDocument(jsonText: string): EntityPatchDocument {
@@ -149,6 +180,148 @@ function preparePatchTarget(target: Record<string, unknown>, path: string): { ex
     return { exists: Object.prototype.hasOwnProperty.call(cursor, finalKey) };
 }
 
+function getValueByPointer(target: unknown, path: string): unknown {
+    try {
+        return jsonpatch.getValueByPointer(target as any, path);
+    } catch {
+        return undefined;
+    }
+}
+
+async function calculateEntityPatchPreview(db: ReturnType<typeof getCurrentDb>, jsonText: string): Promise<EntityPatchPreview> {
+    if (!db) throw new Error('[MemoryStore] No current chat');
+
+    const document = parseEntityPatchDocument(jsonText);
+    const operations = document.patches.map((patch, index) => ({ ...buildEntityPatchOperation(patch), index, original: patch }));
+    const allEntities = await db.entities.toArray();
+    const byName = new Map(allEntities.map(entity => [entity.name, cloneEntity(entity)]));
+    const byAlias = new Map<string, EntityNode>();
+    const previews = new Map<string, EntityPatchPreviewItem>();
+
+    for (const entity of allEntities) {
+        for (const alias of entity.aliases || []) {
+            if (!byAlias.has(alias)) {
+                byAlias.set(alias, cloneEntity(entity));
+            }
+        }
+    }
+
+    const getPreviewItem = (name: string, previous?: EntityNode): EntityPatchPreviewItem => {
+        const key = previous?.id || name;
+        const existing = previews.get(key);
+        if (existing) {
+            return existing;
+        }
+
+        const item: EntityPatchPreviewItem = {
+            action: previous ? 'update' : 'create',
+            diffs: [],
+            entityId: previous?.id,
+            entityName: previous?.name || name,
+            previous: previous ? cloneEntity(previous) : undefined,
+        };
+        previews.set(key, item);
+        return item;
+    };
+
+    for (const operation of operations) {
+        let entity = byName.get(operation.name) || byAlias.get(operation.name) || null;
+
+        if (operation.isWholeEntity) {
+            const item = getPreviewItem(operation.name, entity || undefined);
+            const oldValue = entity ? cloneEntity(entity) : undefined;
+
+            if (operation.op === 'remove') {
+                item.action = entity ? 'delete' : 'noop';
+                item.next = undefined;
+                item.diffs.push({
+                    effectiveOp: 'remove',
+                    index: operation.index,
+                    isWholeEntity: true,
+                    oldValue,
+                    op: operation.op,
+                    path: operation.original.path,
+                });
+                if (entity) {
+                    byName.delete(entity.name);
+                }
+                continue;
+            }
+
+            const nextEntity = createEntityFromPatch(operation.name, operation.value, entity?.id);
+            const merged = entity
+                ? { ...entity, ...nextEntity, id: entity.id, last_updated_at: Date.now() }
+                : nextEntity;
+            if (!merged.description) {
+                merged.description = profileToYaml(merged.name, merged.type, merged.profile || {});
+            }
+
+            item.action = entity ? 'update' : 'create';
+            item.next = cloneEntity(merged);
+            item.diffs.push({
+                effectiveOp: operation.op,
+                index: operation.index,
+                isWholeEntity: true,
+                newValue: cloneEntity(merged),
+                oldValue,
+                op: operation.op,
+                path: operation.original.path,
+            });
+            byName.set(merged.name, cloneEntity(merged));
+            continue;
+        }
+
+        if (!entity) {
+            entity = createEntityFromPatch(operation.name);
+            byName.set(entity.name, cloneEntity(entity));
+        }
+
+        const item = getPreviewItem(operation.name, entity);
+        const target = cloneEntity(item.next || entity);
+        const oldValue = getValueByPointer(target, operation.relativePath);
+        const prepared = preparePatchTarget(target as unknown as Record<string, unknown>, operation.relativePath);
+        const effectiveOp = operation.op === 'replace' && !prepared.exists ? 'add' : operation.op;
+
+        jsonpatch.applyOperation(target, {
+            op: effectiveOp,
+            path: operation.relativePath,
+            value: operation.value,
+        } as jsonpatch.Operation, false, true);
+
+        target.aliases = Array.isArray(target.aliases)
+            ? [...new Set(target.aliases.filter((alias): alias is string => typeof alias === 'string' && alias.trim().length > 0).map(alias => alias.trim()))]
+            : [];
+        target.profile = target.profile && typeof target.profile === 'object' && !Array.isArray(target.profile) ? target.profile : {};
+        target.type = normalizeEntityType(target.type);
+        target.last_updated_at = Date.now();
+        target.description = profileToYaml(target.name, target.type, target.profile || {});
+
+        item.action = item.previous ? 'update' : 'create';
+        item.entityName = target.name;
+        item.next = cloneEntity(target);
+        item.diffs.push({
+            effectiveOp,
+            index: operation.index,
+            isWholeEntity: false,
+            newValue: effectiveOp !== 'remove' ? getValueByPointer(target, operation.relativePath) : undefined,
+            oldValue,
+            op: operation.op,
+            path: operation.original.path,
+        });
+        byName.delete(entity.name);
+        byName.set(target.name, cloneEntity(target));
+    }
+
+    const items = [...previews.values()];
+    return {
+        created: items.filter(item => item.action === 'create').length,
+        deleted: items.filter(item => item.action === 'delete').length,
+        items,
+        operations: document.patches.length,
+        updated: items.filter(item => item.action === 'update').length,
+    };
+}
+
 export interface EntityState {
     // V0.9 实体相关
     getAllEntities: () => Promise<EntityNode[]>;
@@ -156,6 +329,7 @@ export interface EntityState {
     saveEntities: (entities: Omit<EntityNode, 'id' | 'last_updated_at'>[]) => Promise<EntityNode[]>;
     updateEntity: (entityId: string, updates: Partial<EntityNode>) => Promise<void>;
     updateEntities: (updates: { id: string, updates: Partial<EntityNode> }[]) => Promise<void>;
+    previewEntityPatchesFromJSON: (jsonText: string) => Promise<EntityPatchPreview>;
     applyEntityPatchesFromJSON: (jsonText: string) => Promise<BatchEntityPatchResult>;
     deleteEntity: (entityId: string) => Promise<void>;
     deleteEntities: (entityIds: string[]) => Promise<void>;
@@ -275,6 +449,12 @@ export const createEntitySlice: StateCreator<any, [], [], EntityState> = (set, g
         const updated = Math.max(0, touchedIds.size - created);
         console.log(`[MemoryStore] Applied ${document.patches.length} entity JSON patches: ${created} created, ${updated} updated`);
         return { created, operations: document.patches.length, updated };
+    },
+
+    previewEntityPatchesFromJSON: async (jsonText: string) => {
+        const db = getCurrentDb();
+        if (!db) throw new Error('[MemoryStore] No current chat');
+        return calculateEntityPatchPreview(db, jsonText);
     },
 
     deleteEntities: async (entityIds: string[]) => {

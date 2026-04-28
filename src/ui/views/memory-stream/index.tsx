@@ -252,6 +252,7 @@ export const MemoryStream: React.FC<MemoryStreamProps> = ({ initialTab }) => {
             <EntityPatchModal
                 isOpen={ms.showEntityPatchModal}
                 onClose={() => ms.setShowEntityPatchModal(false)}
+                onPreview={ms.handleEntityPatchPreview}
                 onExecute={ms.handleEntityPatchExecute}
             />
         </div>
