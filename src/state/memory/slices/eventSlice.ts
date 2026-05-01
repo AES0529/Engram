@@ -4,9 +4,96 @@ import { WorldInfoService } from '@/integrations/tavern';
 import type { StateCreator } from 'zustand';
 import { getCurrentDb, tryGetCurrentDb } from './coreSlice';
 
+type ImportedEventMeta = Partial<EventNode['structured_kv']>;
+
+interface ImportedEventInput {
+    summary: string;
+    meta?: ImportedEventMeta;
+    structured_kv?: ImportedEventMeta;
+    significance_score?: number;
+    level?: number;
+    is_archived?: boolean;
+    is_embedded?: boolean;
+    is_locked?: boolean;
+    timestamp?: number;
+    source_range?: EventNode['source_range'];
+}
+
+interface EventImportDocument {
+    events: ImportedEventInput[];
+}
+
+export interface EventJSONImportPreview {
+    events: EventNode[];
+    total: number;
+}
+
+export interface EventJSONImportResult {
+    created: number;
+}
+
+function toStringArray(value: unknown): string[] {
+    if (Array.isArray(value)) {
+        return value.map(item => String(item).trim()).filter(Boolean);
+    }
+    if (typeof value === 'string') {
+        return value.split(/[,，]/).map(item => item.trim()).filter(Boolean);
+    }
+    return [];
+}
+
+function normalizeImportedEvent(input: ImportedEventInput, index: number, timestamp: number): EventNode {
+    if (!input || typeof input !== 'object') {
+        throw new Error(`events[${index}] 必须是对象`);
+    }
+    if (typeof input.summary !== 'string' || input.summary.trim().length === 0) {
+        throw new Error(`events[${index}].summary 必须是非空字符串`);
+    }
+
+    const meta = input.meta || input.structured_kv || {};
+    const significance = Number(input.significance_score ?? 0.5);
+
+    return {
+        id: generateShortUUID('evt_preview_'),
+        is_archived: Boolean(input.is_archived),
+        is_embedded: Boolean(input.is_embedded),
+        is_locked: Boolean(input.is_locked),
+        level: Number.isFinite(Number(input.level)) ? Number(input.level) : 0,
+        significance_score: Number.isFinite(significance) ? Math.min(1, Math.max(0, significance)) : 0.5,
+        source_range: input.source_range || { end_index: 0, start_index: 0 },
+        structured_kv: {
+            causality: typeof meta.causality === 'string' ? meta.causality : '',
+            event: typeof meta.event === 'string' ? meta.event : '',
+            location: toStringArray(meta.location),
+            logic: toStringArray(meta.logic),
+            role: toStringArray(meta.role),
+            time_anchor: typeof meta.time_anchor === 'string' ? meta.time_anchor : '',
+        },
+        summary: input.summary.trim(),
+        timestamp: Number.isFinite(Number(input.timestamp)) ? Number(input.timestamp) : timestamp,
+    };
+}
+
+function parseEventImportDocument(jsonText: string): EventImportDocument {
+    const parsed = JSON.parse(jsonText);
+    if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.events)) {
+        throw new Error('JSON 根对象必须包含 events 数组');
+    }
+    return parsed as EventImportDocument;
+}
+
+function buildEventImportPreview(jsonText: string): EventJSONImportPreview {
+    const document = parseEventImportDocument(jsonText);
+    const baseTimestamp = Date.now();
+    const events = document.events.map((event, index) => normalizeImportedEvent(event, index, baseTimestamp + index));
+    return { events, total: events.length };
+}
+
 export interface EventState {
     saveEvent: (event: Omit<EventNode, 'id' | 'timestamp'> & { timestamp?: number }) => Promise<EventNode>;
     saveEvents: (events: (Omit<EventNode, 'id' | 'timestamp'> & { timestamp?: number })[]) => Promise<EventNode[]>;
+    previewEventsFromJSON: (jsonText: string) => Promise<EventJSONImportPreview>;
+    importEventsFromJSON: (jsonText: string) => Promise<EventJSONImportResult>;
     importDatabase: (sourceDbName: string) => Promise<{ events: number, entities: number }>;
     getEventSummaries: (recalledIds?: string[]) => Promise<string>;
     countEventTokens: () => Promise<{ totalTokens: number; eventCount: number; activeEventCount: number }>;
@@ -68,6 +155,30 @@ export const createEventSlice: StateCreator<any, [], [], EventState> = (set, get
         }));
 
         return events;
+    },
+
+    previewEventsFromJSON: async (jsonText: string) => {
+        return buildEventImportPreview(jsonText);
+    },
+
+    importEventsFromJSON: async (jsonText: string) => {
+        const db = getCurrentDb();
+        if (!db) {throw new Error('[MemoryStore] No current chat');}
+
+        const preview = buildEventImportPreview(jsonText);
+        const events: EventNode[] = preview.events.map(event => ({
+            ...event,
+            id: generateShortUUID('evt_'),
+        }));
+
+        if (events.length > 0) {
+            await db.events.bulkAdd(events);
+            set((state: any) => ({
+                recentEvents: [...state.recentEvents, ...events].slice(-10)
+            }));
+        }
+
+        return { created: events.length };
     },
 
     importDatabase: async (sourceDbName: string) => {

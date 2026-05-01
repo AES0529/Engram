@@ -20,6 +20,7 @@ interface ActionBarProps {
     onRefresh: () => void;
     onBatchDelete: () => void;
     onEntityPatchClick: () => void;
+    onEventImportClick: () => void;
     onImportClick: () => void;
     onReembed: () => void;
     onSortToggle: () => void;
@@ -45,6 +46,7 @@ export const ActionBar: React.FC<ActionBarProps> = ({
     onRefresh,
     onBatchDelete,
     onEntityPatchClick,
+    onEventImportClick,
     onImportClick,
     onReembed,
     onSortToggle,
@@ -130,6 +132,17 @@ export const ActionBar: React.FC<ActionBarProps> = ({
 
                     {viewTab === 'list' && (
                         <button
+                            onClick={onEventImportClick}
+                            className="inline-flex items-center gap-1.5 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground rounded transition-colors"
+                            title="粘贴 JSON 批量生成记忆事件"
+                        >
+                            <Braces size={12} />
+                            JSON导入
+                        </button>
+                    )}
+
+                    {viewTab === 'list' && (
+                        <button
                             onClick={onReembed}
                             disabled={isReembedding}
                             className="inline-flex items-center gap-1.5 px-2 py-1.5 text-xs text-muted-foreground hover:text-foreground rounded transition-colors disabled:opacity-50"
@@ -208,6 +221,16 @@ export const ActionBar: React.FC<ActionBarProps> = ({
                                     >
                                         <Braces size={14} className="text-muted-foreground" />
                                         JSON批改
+                                    </button>
+                                )}
+
+                                {viewTab === 'list' && (
+                                    <button
+                                        onClick={() => { onEventImportClick(); onMobileActionsClose(); }}
+                                        className="flex items-center gap-2 px-3 py-2 text-xs text-foreground hover:bg-muted text-left"
+                                    >
+                                        <Braces size={14} className="text-muted-foreground" />
+                                        JSON导入
                                     </button>
                                 )}
 

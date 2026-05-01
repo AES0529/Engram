@@ -58,6 +58,7 @@ export function useMemoryStream(initialTab: ViewTab = 'list') {
     const [previewContent, setPreviewContent] = useState('');
     const [showImportModal, setShowImportModal] = useState(false);
     const [showEntityPatchModal, setShowEntityPatchModal] = useState(false);
+    const [showEventImportModal, setShowEventImportModal] = useState(false);
     const [availableDbs, setAvailableDbs] = useState<string[]>([]);
     const [selectedDbToImport, setSelectedDbToImport] = useState<string>('');
     const [showMobileActions, setShowMobileActions] = useState(false);
@@ -464,6 +465,16 @@ export function useMemoryStream(initialTab: ViewTab = 'list') {
         setShowEntityPatchModal(true);
     }, [hasChanges]);
 
+    const handleOpenEventImportModal = useCallback(() => {
+        if (hasChanges) {
+            if (!confirm('您有未保存的编辑内容，JSON 导入会直接新增事件并刷新列表，确定要继续吗？')) {
+                return;
+            }
+            setPendingChanges(new Map());
+        }
+        setShowEventImportModal(true);
+    }, [hasChanges]);
+
     const handleEntityPatchExecute = useCallback(async (jsonText: string) => {
         try {
             setIsLoading(true);
@@ -497,6 +508,39 @@ export function useMemoryStream(initialTab: ViewTab = 'list') {
         }
     }, [store.previewEntityPatchesFromJSON]);
 
+    const handleEventImportPreview = useCallback(async (jsonText: string) => {
+        try {
+            return await store.previewEventsFromJSON(jsonText);
+        } catch (error: any) {
+            console.error('[MemoryStream] Event JSON import preview failed:', error);
+            notificationService.error('事件 JSON 预览失败: ' + (error.message || '未知错误'), 'MemoryStream');
+            throw error;
+        }
+    }, [store.previewEventsFromJSON]);
+
+    const handleEventImportExecute = useCallback(async (jsonText: string) => {
+        try {
+            setIsLoading(true);
+            const result = await store.importEventsFromJSON(jsonText);
+            setShowEventImportModal(false);
+            setPendingChanges(new Map());
+            setSelectedId(null);
+            setViewMode('browse');
+            await loadEvents();
+
+            const { MacroService } = await import('@/integrations/tavern/prompt/macros');
+            await MacroService.refreshEngramCache();
+
+            notificationService.success(`事件导入完成：新增 ${result.created} 条记忆事件`, 'MemoryStream');
+        } catch (error: any) {
+            console.error('[MemoryStream] Event JSON import failed:', error);
+            notificationService.error('事件 JSON 导入失败: ' + (error.message || '未知错误'), 'MemoryStream');
+            throw error;
+        } finally {
+            setIsLoading(false);
+        }
+    }, [store.importEventsFromJSON, loadEvents]);
+
     const handleImportExecute = useCallback(async () => {
         if (!selectedDbToImport) {
             notificationService.warning('请选择要导入的数据库', 'MemoryStream');
@@ -528,7 +572,7 @@ export function useMemoryStream(initialTab: ViewTab = 'list') {
         entitySortMode, entityGroupMode,
         hasChanges, isReembedding, pendingChanges, pendingEntityChanges,
         showPreview, previewContent,
-        showImportModal, showEntityPatchModal, availableDbs, selectedDbToImport,
+        showImportModal, showEntityPatchModal, showEventImportModal, availableDbs, selectedDbToImport,
         showMobileActions,
 
         // Derived State
@@ -539,7 +583,7 @@ export function useMemoryStream(initialTab: ViewTab = 'list') {
         setSearchQuery, setSortOrder, setShowActiveOnly,
         setEntitySortMode, setEntityGroupMode,
         setShowPreview, setPreviewContent,
-        setShowImportModal, setShowEntityPatchModal, setSelectedDbToImport,
+        setShowImportModal, setShowEntityPatchModal, setShowEventImportModal, setSelectedDbToImport,
         setShowMobileActions, setCheckedIds,
 
         // Callbacks
@@ -552,6 +596,7 @@ export function useMemoryStream(initialTab: ViewTab = 'list') {
         handleBatchSave, handleDelete, handleBatchDelete,
         handleReembedAll, handleOpenImportModal, handleImportExecute,
         handleOpenEntityPatchModal, handleEntityPatchPreview, handleEntityPatchExecute,
+        handleOpenEventImportModal, handleEventImportPreview, handleEventImportExecute,
         handleCreateEvent, handleCreateEntity,
         loadEvents, loadEntities,
     };
