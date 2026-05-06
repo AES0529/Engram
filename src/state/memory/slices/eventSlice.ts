@@ -42,6 +42,23 @@ function toStringArray(value: unknown): string[] {
     return [];
 }
 
+function burnEventSummary(kv: EventNode['structured_kv'], rawSummary: string): string {
+    const titleSuffixParts: string[] = [];
+    if (kv.causality) { titleSuffixParts.push(kv.causality); }
+    if (kv.logic.length > 0) { titleSuffixParts.push(kv.logic.join(', ')); }
+    const titleSuffix = titleSuffixParts.length > 0 ? ` (${titleSuffixParts.join(' | ')})` : '';
+
+    const titleLine = kv.event ? `${kv.event}${titleSuffix}:\n` : '';
+
+    const metaParts: string[] = [];
+    if (kv.time_anchor) { metaParts.push(kv.time_anchor); }
+    if (kv.location.length > 0) { metaParts.push(kv.location.join(', ')); }
+    if (kv.role.length > 0) { metaParts.push(kv.role.join(', ')); }
+    const metaLine = metaParts.length > 0 ? `(${metaParts.join(' | ')}) ` : '';
+
+    return `${titleLine}${metaLine}${rawSummary}`;
+}
+
 function normalizeImportedEvent(input: ImportedEventInput, index: number, timestamp: number): EventNode {
     if (!input || typeof input !== 'object') {
         throw new Error(`events[${index}] 必须是对象`);
@@ -51,7 +68,18 @@ function normalizeImportedEvent(input: ImportedEventInput, index: number, timest
     }
 
     const meta = input.meta || input.structured_kv || {};
+    const roleSource = (meta as ImportedEventMeta & { characters?: unknown }).role
+        ?? (meta as ImportedEventMeta & { characters?: unknown }).characters;
     const significance = Number(input.significance_score ?? 0.5);
+    const structuredKV: EventNode['structured_kv'] = {
+        causality: typeof meta.causality === 'string' ? meta.causality : '',
+        event: typeof meta.event === 'string' ? meta.event : '',
+        location: toStringArray(meta.location),
+        logic: toStringArray(meta.logic),
+        role: toStringArray(roleSource),
+        time_anchor: typeof meta.time_anchor === 'string' ? meta.time_anchor : '',
+    };
+    const rawSummary = input.summary.trim();
 
     return {
         id: generateShortUUID('evt_preview_'),
@@ -61,15 +89,8 @@ function normalizeImportedEvent(input: ImportedEventInput, index: number, timest
         level: Number.isFinite(Number(input.level)) ? Number(input.level) : 0,
         significance_score: Number.isFinite(significance) ? Math.min(1, Math.max(0, significance)) : 0.5,
         source_range: input.source_range || { end_index: 0, start_index: 0 },
-        structured_kv: {
-            causality: typeof meta.causality === 'string' ? meta.causality : '',
-            event: typeof meta.event === 'string' ? meta.event : '',
-            location: toStringArray(meta.location),
-            logic: toStringArray(meta.logic),
-            role: toStringArray(meta.role),
-            time_anchor: typeof meta.time_anchor === 'string' ? meta.time_anchor : '',
-        },
-        summary: input.summary.trim(),
+        structured_kv: structuredKV,
+        summary: burnEventSummary(structuredKV, rawSummary),
         timestamp: Number.isFinite(Number(input.timestamp)) ? Number(input.timestamp) : timestamp,
     };
 }
