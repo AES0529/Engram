@@ -59,24 +59,24 @@ export const PreviewModal: React.FC<PreviewModalProps> = ({ isOpen, onClose, con
             icon={<FileText size={16} />}
             maxWidth="max-w-2xl"
             footer={
-                <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between w-full">
-                    <div className="text-[10px] text-muted-foreground">
-                        *此内容为 {'{{engramSummaries}}'} 和 {'{{engramEntityStates}}'} 宏在当前上下文中的实际输出值
-                    </div>
+                <div className="text-[10px] text-muted-foreground">
+                    *此内容为 {'{{engramSummaries}}'} 和 {'{{engramEntityStates}}'} 宏在当前上下文中的实际输出值
+                </div>
+            }
+        >
+            <div className="p-4 space-y-3">
+                <div className="flex items-center justify-end">
                     <button
                         onClick={handleCopy}
                         disabled={!content.trim()}
-                        className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded hover:opacity-90 disabled:opacity-50 transition-colors"
+                        className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs bg-primary text-primary-foreground rounded hover:opacity-90 disabled:opacity-50 transition-colors shadow-sm"
                         title="复制当前宏注入预览的全部内容"
                     >
                         {copied ? <Check size={12} /> : <Copy size={12} />}
                         {copied ? '已复制' : '复制全部'}
                     </button>
                 </div>
-            }
-        >
-            <div className="p-4">
-                <pre className="text-xs font-mono whitespace-pre-wrap leading-relaxed text-muted-foreground bg-muted/30 p-4 rounded border border-border/50">
+                <pre className="text-xs font-mono whitespace-pre-wrap leading-relaxed text-muted-foreground bg-muted/30 p-4 rounded border border-border/50 max-h-[60vh] overflow-auto">
                     {content}
                 </pre>
             </div>
