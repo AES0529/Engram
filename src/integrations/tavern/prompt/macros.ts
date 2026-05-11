@@ -176,6 +176,7 @@ export class MacroService {
         // Agentic RAG
         this.cachedAgenticIndex = '';
         this.cachedPureActiveEvents = '';
+        this.lastExplicitRecalledIds = [];
     }
 
     // --- 缓存 ---
@@ -196,6 +197,7 @@ export class MacroService {
     private static cachedAgenticIndex: string = '';
     // Agentic RAG: 纯蓝灯事件缓存
     private static cachedPureActiveEvents: string = '';
+    private static lastExplicitRecalledIds: string[] = [];
 
     /**
      * 获取缓存的事件摘要
@@ -263,9 +265,10 @@ export class MacroService {
                 const snapshot = brainRecallCache.getShortTermSnapshot();
 
                 if (!effectiveRecalledIds && snapshot.length > 0) {
-                    effectiveRecalledIds = snapshot
+                    const eventIds = snapshot
                         .filter(slot => slot.category === 'event')
                         .map(slot => slot.id);
+                    if (eventIds.length > 0) { effectiveRecalledIds = eventIds; }
                 }
 
                 // 提取实体 ID
@@ -277,8 +280,15 @@ export class MacroService {
                 Logger.debug('MacroService', 'BrainRecallCache 获取失败，跳过', error);
             }
 
+            if (!effectiveRecalledIds && this.lastExplicitRecalledIds.length > 0) {
+                effectiveRecalledIds = this.lastExplicitRecalledIds;
+            }
+
             // 1. 刷新事件摘要（带召回 ID）
             this.cachedSummaries = await store.getEventSummaries(effectiveRecalledIds);
+            if (effectiveRecalledIds && effectiveRecalledIds.length > 0) {
+                this.lastExplicitRecalledIds = effectiveRecalledIds;
+            }
 
             // 2. 刷新归档摘要
             await this.refreshArchivedSummaries();
@@ -377,6 +387,7 @@ export class MacroService {
         try {
             const recalledIds = nodes.map(n => n.id);
             const store = useMemoryStore.getState();
+            this.lastExplicitRecalledIds = recalledIds;
 
             // 1. 刷新事件摘要
             this.cachedSummaries = await store.getEventSummaries(recalledIds);
