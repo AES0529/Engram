@@ -11,7 +11,7 @@
  */
 
 import { SettingsManager } from "@/config/settings";
-import type { LLMPreset } from "@/config/types/llm";
+import type { LLMPreset, LLMRequestParameterKey } from "@/config/types/llm";
 import { Logger } from "@/core/logger";
 
 const MODULE = 'LLMAdapter';
@@ -57,6 +57,8 @@ interface QueuedRequest {
 function getTavernHelper(): {
     generate?: (options: unknown) => Promise<string>;
     generateRaw?: (options: unknown) => Promise<string>;
+    getPreset?: (presetName: 'in_use' | string) => any;
+    replacePreset?: (presetName: 'in_use' | string, preset: any, options?: { render?: 'debounced' | 'immediate' }) => Promise<void>;
 } | null {
     try {
         // @ts-expect-error - TavernHelper 全局对象
@@ -203,6 +205,67 @@ class LLMAdapter {
         return config;
     }
 
+    private getPresetSettingKey(key: LLMRequestParameterKey): string | undefined {
+        const keyMap: Partial<Record<LLMRequestParameterKey, string>> = {
+            frequency_penalty: 'frequency_penalty',
+            max_context: 'max_context',
+            max_tokens: 'max_completion_tokens',
+            presence_penalty: 'presence_penalty',
+            stream: 'should_stream',
+            temperature: 'temperature',
+            top_k: 'top_k',
+            top_p: 'top_p',
+        };
+        return keyMap[key];
+    }
+
+    private async withExcludedPresetSettings<T>(
+        helper: NonNullable<ReturnType<typeof getTavernHelper>>,
+        preset: LLMPreset | undefined,
+        callback: () => Promise<T>
+    ): Promise<T> {
+        const excluded = preset?.excludedParameters || [];
+        const settingKeys = excluded
+            .map(key => this.getPresetSettingKey(key))
+            .filter((key): key is string => Boolean(key));
+
+        if (settingKeys.length === 0 || !helper.getPreset || !helper.replacePreset) {
+            return callback();
+        }
+
+        let originalPreset: any;
+        try {
+            originalPreset = helper.getPreset('in_use');
+        } catch (error) {
+            Logger.warn(MODULE, '读取酒馆当前预设失败，无法从底层预设排除请求参数', error);
+            return callback();
+        }
+
+        const patchedPreset = structuredClone(originalPreset);
+        let changed = false;
+        for (const settingKey of settingKeys) {
+            if (patchedPreset?.settings && settingKey in patchedPreset.settings) {
+                delete patchedPreset.settings[settingKey];
+                changed = true;
+            }
+        }
+
+        if (!changed) {
+            return callback();
+        }
+
+        try {
+            await helper.replacePreset('in_use', patchedPreset, { render: 'immediate' });
+            return await callback();
+        } finally {
+            try {
+                await helper.replacePreset('in_use', originalPreset, { render: 'immediate' });
+            } catch (error) {
+                Logger.error(MODULE, '恢复酒馆当前预设失败', error);
+            }
+        }
+    }
+
     // =========================================================================
     // 核心调用逻辑
     // =========================================================================
@@ -242,36 +305,38 @@ class LLMAdapter {
             _engram_internal: request.internal,
         };
 
-        let content: string;
+        const generateContent = async (): Promise<string> => {
+            if (helper.generateRaw) {
+                const prompts: any[] = [];
 
-        if (helper.generateRaw) {
-            const prompts: any[] = [];
-            
-            // 严格遵循：System -> User 顺序
-            if (finalSystemPrompt) {
-                prompts.push({ content: finalSystemPrompt, role: 'system' });
+                // 严格遵循：System -> User 顺序
+                if (finalSystemPrompt) {
+                    prompts.push({ content: finalSystemPrompt, role: 'system' });
+                }
+
+                // 直接将用户内容作为 user 角色推入，不再使用 'user_input' 占位符
+                // 这样酒馆就不会在末尾自动追加多余的内容
+                prompts.push({ content: finalUserPrompt, role: 'user' });
+
+                return await helper.generateRaw({
+                    custom_api: customApiConfig,
+                    ordered_prompts: prompts,
+                    ...generationOptions,
+                });
+            } else if (helper.generate) {
+                return await helper.generate({
+                    custom_api: customApiConfig,
+                    max_chat_history: 0,
+                    system_prompt: finalSystemPrompt,
+                    user_input: finalUserPrompt,
+                    ...generationOptions,
+                });
+            } else {
+                throw new Error('无可用的生成 API');
             }
-            
-            // 直接将用户内容作为 user 角色推入，不再使用 'user_input' 占位符
-            // 这样酒馆就不会在末尾自动追加多余的内容
-            prompts.push({ content: finalUserPrompt, role: 'user' });
+        };
 
-            content = await helper.generateRaw({
-                custom_api: customApiConfig,
-                ordered_prompts: prompts,
-                ...generationOptions,
-            });
-        } else if (helper.generate) {
-            content = await helper.generate({
-                custom_api: customApiConfig,
-                max_chat_history: 0,
-                system_prompt: finalSystemPrompt,
-                user_input: finalUserPrompt,
-                ...generationOptions,
-            });
-        } else {
-            throw new Error('无可用的生成 API');
-        }
+        const content = await this.withExcludedPresetSettings(helper, currentPreset, generateContent);
 
         // --- 全局数据遥测 (Telemetry) ---
         SettingsManager.incrementStatistic('totalLlmCalls', 1);
