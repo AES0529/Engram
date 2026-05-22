@@ -33,6 +33,16 @@ export interface ContextSettings {
     maxChatHistory: number;
 }
 
+export type LLMRequestParameterKey =
+    | 'frequency_penalty'
+    | 'max_context'
+    | 'max_tokens'
+    | 'presence_penalty'
+    | 'stream'
+    | 'temperature'
+    | 'top_k'
+    | 'top_p';
+
 export interface LLMPreset {
     /** 唯一标识 */
     id: string;
@@ -48,6 +58,8 @@ export interface LLMPreset {
     modelOverride?: string;
     /** 是否开启流式传输 (兼容强制要求 stream 选项的端点) */
     stream?: boolean;
+    /** 不发送到请求主体/custom_api 的参数名，用于兼容拒收特定字段的模型后端 */
+    excludedParameters?: LLMRequestParameterKey[];
     /** 模型采样参数 */
     parameters: SamplingParameters;
     /** 上下文设置 */

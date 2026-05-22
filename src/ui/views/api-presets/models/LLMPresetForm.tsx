@@ -1,7 +1,7 @@
 /**
  * LLM 预设编辑表单
  */
-import type { APISource, LLMPreset } from '@/config/types/llm';
+import type { APISource, LLMPreset, LLMRequestParameterKey } from '@/config/types/llm';
 import type { ModelInfo} from '@/integrations/llm/ModelDiscovery';
 import { ModelService } from '@/integrations/llm/ModelDiscovery';
 import { SliderField } from '@/ui/components/core/SliderField';
@@ -30,6 +30,17 @@ const API_SOURCE_OPTIONS: { value: APISource; label: string }[] = [
 const SOURCE_OPTIONS = [
     { label: '使用酒馆当前配置', value: 'tavern' },
     { label: '自定义 API 配置', value: 'custom' },
+];
+
+const EXCLUDABLE_PARAMETER_OPTIONS: { key: LLMRequestParameterKey; label: string; description: string }[] = [
+    { key: 'temperature', label: 'temperature', description: '温度采样参数' },
+    { key: 'top_p', label: 'top_p', description: '核采样参数。部分模型会因不支持此字段返回 400。' },
+    { key: 'top_k', label: 'top_k', description: 'Top-K 采样参数' },
+    { key: 'max_tokens', label: 'max_tokens', description: '最大输出 Token 数' },
+    { key: 'max_context', label: 'max_context', description: '上下文 Token 上限' },
+    { key: 'frequency_penalty', label: 'frequency_penalty', description: '频率惩罚' },
+    { key: 'presence_penalty', label: 'presence_penalty', description: '存在惩罚' },
+    { key: 'stream', label: 'stream', description: '流式传输开关，仅自定义 API 请求会发送' },
 ];
 
 export const LLMPresetForm: React.FC<LLMPresetFormProps> = ({
@@ -86,6 +97,16 @@ export const LLMPresetForm: React.FC<LLMPresetFormProps> = ({
         updatePreset({
             parameters: { ...preset.parameters, [key]: value },
         });
+    };
+
+    const toggleExcludedParameter = (key: LLMRequestParameterKey, excluded: boolean) => {
+        const current = new Set(preset.excludedParameters || []);
+        if (excluded) {
+            current.add(key);
+        } else {
+            current.delete(key);
+        }
+        updatePreset({ excludedParameters: [...current] });
     };
 
     // 更新上下文设置
@@ -328,6 +349,31 @@ export const LLMPresetForm: React.FC<LLMPresetFormProps> = ({
                         <div className="text-xs text-muted-foreground/70">鼓励模型讨论新主题。</div>
                     </div>
                 </div>
+            </FormSection>
+
+            <FormSection
+                title="排除请求参数"
+                description="勾选后，该参数不会写入 LLM 请求主体/custom_api。用于兼容会拒收 top_p 等字段的模型后端。"
+                collapsible
+                defaultCollapsed
+            >
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {EXCLUDABLE_PARAMETER_OPTIONS.map(option => (
+                        <SwitchField
+                            key={option.key}
+                            label={`不发送 ${option.label}`}
+                            checked={(preset.excludedParameters || []).includes(option.key)}
+                            onChange={(checked) => toggleExcludedParameter(option.key, checked)}
+                            description={option.description}
+                            compact
+                        />
+                    ))}
+                </div>
+                {(preset.excludedParameters || []).length > 0 && (
+                    <div className="text-[10px] text-muted-foreground bg-muted/20 border border-border/50 rounded p-2 break-all">
+                        当前不会发送：{preset.excludedParameters?.join(', ')}
+                    </div>
+                )}
             </FormSection>
 
             {/* 网络与重试 */}

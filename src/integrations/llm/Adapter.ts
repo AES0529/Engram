@@ -182,13 +182,19 @@ class LLMAdapter {
         // 移除 undefined 项，避免覆盖酒馆默认值
         Object.keys(config).forEach(key => config[key] === undefined && delete config[key]);
 
+        for (const key of preset.excludedParameters || []) {
+            delete config[key];
+        }
+
         // 如果是 custom，额外添加连接信息
         if (preset.source === 'custom' && preset.custom) {
             config.apiurl = preset.custom.apiUrl;
             config.key = preset.custom.apiKey;
             config.model = preset.custom.model;
             config.source = 'openai';
-            config.stream = preset.stream ?? false;
+            if (!preset.excludedParameters?.includes('stream')) {
+                config.stream = preset.stream ?? false;
+            }
         } else if (preset.modelOverride) {
             // 如果是非 custom 预设但指定了模型名，也强制覆盖
             config.model = preset.modelOverride;
